@@ -1,0 +1,70 @@
+name: pipeline
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"  # weekly Monday 06:00 UTC
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: setup python
+        run: uv python install 3.12
+
+      - name: sync deps
+        run: uv sync --extra dev
+
+      - name: run pipeline (smoke mode)
+        run: uv run python -m movielense.run --smoke
+
+      - name: upload run artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: movielense-run-${{ github.run_id }}
+          path: |
+            artifacts/
+            mlruns.db
+            mlruns/
+          if-no-files-found: warn
+
+      - name: prepare pages site
+        run: |
+          mkdir -p _site
+          cp artifacts/reports/dashboard.html _site/index.html
+          cp artifacts/reports/research_report.md _site/research_report.md || true
+
+      - name: upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  publish-pages:
+    needs: run-pipeline
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,78 @@
+# MovieLense pipeline configuration
+# Every value here is captured into the run snapshot for reproducibility.
+
+seed: 42
+run_name: null  # null -> auto: ISO timestamp + short uuid
+
+dataset:
+  name: ml-100k
+  url: https://files.grouplens.org/datasets/movielens/ml-100k.zip
+  raw_dir: data/raw
+  processed_dir: data/processed
+  min_user_interactions: 5
+  min_item_interactions: 5
+
+split:
+  strategy: temporal_per_user  # temporal_per_user | global_temporal | random
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  rating_threshold: 4.0  # implicit positive if rating >= threshold
+
+eval:
+  ks: [5, 10, 20]
+  primary_metric: ndcg@10
+  candidate_strategy: full  # full | sampled
+  sampled_negatives: 100
+
+models:
+  random: {}
+  popularity: {}
+  itemknn:
+    k: 50
+    similarity: cosine
+  als:
+    factors: 64
+    regularization: 0.05
+    iterations: 15
+    alpha: 40.0
+  bpr:
+    factors: 64
+    lr: 0.005
+    reg: 0.01
+    epochs: 20
+    batch_size: 1024
+    device: auto  # auto -> cuda > mps > cpu
+
+tuning:
+  enabled: true
+  trials_per_model: 12
+  timeout_seconds_per_model: 300
+  models_to_tune: [itemknn, als, bpr]
+  pruner: median
+  sampler: tpe
+
+selection:
+  objective: ndcg@10
+  direction: maximize
+  baselines: [random, popularity]
+
+registry:
+  tracking_uri: sqlite:///mlruns.db
+  experiment_name: movielense
+  registered_model_name: movielense-best
+
+dashboards:
+  mlflow:
+    enabled: true
+    ui_port: 5000
+  wandb:
+    enabled: false        # opt-in: requires `pip install -e '.[wandb]'` and WANDB_API_KEY
+    project: movielense
+    entity: null          # null -> default account
+    mode: online          # online | offline | disabled
+
+report:
+  output_dir: artifacts/reports
+  html_filename: dashboard.html
+  markdown_filename: research_report.md

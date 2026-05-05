@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+build/
+dist/
+
+# uv
+.uv/
+
+# Pipeline artifacts
+artifacts/
+mlruns/
+mlruns.db
+data/raw/
+data/processed/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Claude Code local settings
+.claude/
+
+# Reports kept under version control? No — they are generated.
+# But keep an example by force-add when needed.
