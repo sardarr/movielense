@@ -42,6 +42,7 @@ def tune_model(
     sampled_negatives: int,
     sampler: str = "tpe",
     pruner: str = "median",
+    feature_store=None,
 ) -> TuneResult:
     if model_name not in SPACES:
         raise ValueError(f"no search space defined for {model_name}")
@@ -68,6 +69,7 @@ def tune_model(
             num_users=num_users,
             num_items=num_items,
             seed=seed,
+            feature_store=feature_store,
         )
         model.fit(train_positives)
         result = evaluate_model(

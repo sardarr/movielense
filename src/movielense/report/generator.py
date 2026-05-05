@@ -11,6 +11,8 @@ from typing import Any
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from .architectures import ARCHITECTURE
+
 log = logging.getLogger(__name__)
 
 
@@ -48,6 +50,8 @@ def render(
     registered_version: str | None,
     out_html: Path,
     out_md: Path,
+    benchmark_results: list[dict] | None = None,
+    feature_importance: dict | None = None,
 ) -> tuple[Path, Path]:
     env = _env()
 
@@ -96,6 +100,39 @@ def render(
 
     rating_hist = profile.get("rating_hist", {})
     user_dist = profile.get("user_interactions", {})
+
+    # Build benchmark rows aligned with model order.
+    bench_rows: list[dict] = []
+    by_name = {b["model_name"]: b for b in (benchmark_results or [])}
+    for r in model_rows:
+        if r["name"] in by_name:
+            bench_rows.append(by_name[r["name"]])
+
+    # Build per-model architecture cards.
+    arch_cards = []
+    for r in model_rows:
+        info = ARCHITECTURE.get(r["name"])
+        if info:
+            arch_cards.append({"name": r["name"], **info})
+
+    # Feature importance plot data.
+    fi_top = []
+    fi_plot = None
+    if feature_importance:
+        names = feature_importance.get("names", [])
+        gains = feature_importance.get("gain", [])
+        if len(names) and len(gains):
+            top_n = int(config.get("feature_importance", {}).get("top_n", 20))
+            order = sorted(range(len(gains)), key=lambda i: -gains[i])[:top_n]
+            fi_top = [{"feature": names[i], "gain": float(gains[i])} for i in order]
+            fi_plot = {
+                "x": [row["gain"] for row in reversed(fi_top)],
+                "y": [row["feature"] for row in reversed(fi_top)],
+                "type": "bar",
+                "orientation": "h",
+                "marker": {"color": "#0b7285"},
+            }
+
     template = env.get_template("dashboard.html.j2")
     html = template.render(
         run_id=run_id,
@@ -109,6 +146,10 @@ def render(
         metric_columns=metric_columns,
         metric_bars=metric_bars,
         tuning_curves=tuning_curves,
+        bench_rows=bench_rows,
+        arch_cards=arch_cards,
+        fi_top=fi_top,
+        fi_plot=fi_plot,
         best_params_pretty=json.dumps(
             {k: v.get("best_params", {}) for k, v in (tuning_results or {}).items()},
             indent=2,
@@ -122,7 +163,7 @@ def render(
         rating_hist_y=list(rating_hist.values()),
         user_deg_x=[user_dist.get("min", 0), user_dist.get("p25", 0),
                     user_dist.get("median", 0), user_dist.get("p75", 0),
-                    user_dist.get("max", 0)],  # crude — see note in README
+                    user_dist.get("max", 0)],
     )
 
     out_html.parent.mkdir(parents=True, exist_ok=True)
@@ -140,6 +181,9 @@ def render(
         tuning_results=tuning_results or {},
         registered_model_name=registered_model_name,
         registered_version=registered_version,
+        bench_rows=bench_rows,
+        arch_cards=arch_cards,
+        fi_top=fi_top,
     )
     out_md.write_text(md)
 
@@ -171,6 +215,9 @@ def _render_markdown(
     tuning_results: dict[str, Any],
     registered_model_name: str,
     registered_version: str | None,
+    bench_rows: list[dict],
+    arch_cards: list[dict],
+    fi_top: list[dict],
 ) -> str:
     lines = []
     lines.append("# MovieLense Research Report\n")
@@ -202,6 +249,43 @@ def _render_markdown(
         marker = " (winner)" if r["is_winner"] else ""
         lines.append(f"| {r['name']}{marker} | " + " | ".join(cells) + " |")
     lines.append("")
+
+    if arch_cards:
+        lines.append("## Models — what each one does\n")
+        for card in arch_cards:
+            lines.append(f"### {card['name']} — {card['type']}")
+            lines.append(f"- **Inputs**: {card['input']}")
+            lines.append(f"- **Training**: {card['training']}")
+            lines.append(f"- **Inference**: {card['inference']}")
+            lines.append(f"- **Use case**: {card['use_case']}")
+            lines.append(f"- **Interpretability**: {card['interpretability']}")
+            lines.append("")
+
+    if bench_rows:
+        lines.append("## Latency benchmark (batch production)\n")
+        lines.append(
+            "| Model | fit (s) | score p50 (ms) | score p95 (ms) | throughput (users/s) | size (MB) |"
+        )
+        lines.append("|---|---|---|---|---|---|")
+        for b in bench_rows:
+            lines.append(
+                f"| {b['model_name']} | {b['fit_seconds']} | {b['score_latency_p50_ms']} | "
+                f"{b['score_latency_p95_ms']} | {b['throughput_users_per_sec']} | {b['serialized_mb']} |"
+            )
+        lines.append("")
+        lines.append(
+            "_Latency measured scoring "
+            f"{bench_rows[0]['candidates_per_user']} candidates per user across "
+            f"{bench_rows[0]['n_users_measured']} sampled users._\n"
+        )
+
+    if fi_top:
+        lines.append("## Feature importance (LightGBM gain)\n")
+        lines.append("| # | Feature | Gain |")
+        lines.append("|---|---|---|")
+        for i, row in enumerate(fi_top, start=1):
+            lines.append(f"| {i} | `{row['feature']}` | {row['gain']:.0f} |")
+        lines.append("")
 
     if tuning_results:
         lines.append("## Best hyperparameters\n")

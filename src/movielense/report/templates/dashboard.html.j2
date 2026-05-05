@@ -78,6 +78,60 @@
 <div id="metric-bars" style="height: 360px;"></div>
 </div>
 
+{% if arch_cards %}
+<div class="section">
+<h2>Models — what each one does</h2>
+<table>
+  <thead><tr><th>Model</th><th>Type</th><th>Inputs</th><th>Inference</th><th>Use case</th><th>Interpretability</th></tr></thead>
+  <tbody>
+  {% for c in arch_cards %}
+    <tr>
+      <td><strong>{{ c.name }}</strong></td>
+      <td>{{ c.type }}</td>
+      <td>{{ c.input }}</td>
+      <td>{{ c.inference }}</td>
+      <td>{{ c.use_case }}</td>
+      <td>{{ c.interpretability }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if bench_rows %}
+<div class="section">
+<h2>Latency benchmark (batch production)</h2>
+<p class="meta">
+  Per-model fit time, scoring latency (median &amp; p95) for {{ bench_rows[0].candidates_per_user }} candidates per user across {{ bench_rows[0].n_users_measured }} sampled users, throughput, and serialized model size.
+</p>
+<table>
+  <thead><tr><th>Model</th><th>Fit (s)</th><th>p50 (ms/user)</th><th>p95 (ms/user)</th><th>Throughput (users/s)</th><th>Size (MB)</th></tr></thead>
+  <tbody>
+  {% for b in bench_rows %}
+    <tr>
+      <td><strong>{{ b.model_name }}</strong></td>
+      <td>{{ "%.2f"|format(b.fit_seconds) }}</td>
+      <td>{{ "%.2f"|format(b.score_latency_p50_ms) }}</td>
+      <td>{{ "%.2f"|format(b.score_latency_p95_ms) }}</td>
+      <td>{{ "%.0f"|format(b.throughput_users_per_sec) }}</td>
+      <td>{{ "%.2f"|format(b.serialized_mb) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<div id="bench-throughput" style="height: 320px;"></div>
+</div>
+{% endif %}
+
+{% if fi_top %}
+<div class="section">
+<h2>Feature importance (LightGBM gain)</h2>
+<p class="meta">Top {{ fi_top|length }} features ranked by their total contribution to the LambdaRank loss reduction.</p>
+<div id="feature-importance" style="height: 480px;"></div>
+</div>
+{% endif %}
+
 {% if tuning_curves %}
 <div class="section">
 <h2>Hyperparameter tuning</h2>
@@ -121,6 +175,19 @@
   // Metric bars
   Plotly.newPlot("metric-bars", {{ metric_bars | tojson }},
     {title: "Test metrics by model", barmode: "group", margin: {t: 30}});
+
+  {% if bench_rows %}
+  Plotly.newPlot("bench-throughput", [
+    {x: {{ bench_rows | map(attribute='model_name') | list | tojson }},
+     y: {{ bench_rows | map(attribute='throughput_users_per_sec') | list | tojson }},
+     type: "bar", name: "users/sec", marker: {color: "#5c940d"}},
+  ], {title: "Scoring throughput (users/sec, batch)", margin: {t: 30}});
+  {% endif %}
+
+  {% if fi_plot %}
+  Plotly.newPlot("feature-importance", [{{ fi_plot | tojson }}],
+    {title: "Feature importance (gain) — top features", margin: {t: 30, l: 200}});
+  {% endif %}
 
   {% if tuning_curves %}
   Plotly.newPlot("tuning-curves", {{ tuning_curves | tojson }},

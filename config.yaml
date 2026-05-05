@@ -43,12 +43,19 @@ models:
     epochs: 20
     batch_size: 1024
     device: auto  # auto -> cuda > mps > cpu
+  lgbm:
+    n_neg_per_pos: 4
+    num_leaves: 31
+    learning_rate: 0.05
+    n_estimators: 200
+    min_child_samples: 20
+    reg_lambda: 0.0
 
 tuning:
   enabled: true
   trials_per_model: 12
   timeout_seconds_per_model: 300
-  models_to_tune: [itemknn, als, bpr]
+  models_to_tune: [itemknn, als, bpr, lgbm]
   pruner: median
   sampler: tpe
 
@@ -56,6 +63,17 @@ selection:
   objective: ndcg@10
   direction: maximize
   baselines: [random, popularity]
+
+benchmark:
+  # Per-model latency benchmarks for batch production planning.
+  enabled: true
+  n_users_to_score: 200       # users sampled for scoring measurement
+  candidates_per_user: 1000   # candidate items scored per user
+
+feature_importance:
+  enabled: true
+  shap_sample_size: 500       # rows used for SHAP TreeExplainer (LightGBM only)
+  top_n: 20                   # rows shown in the dashboard
 
 registry:
   tracking_uri: sqlite:///mlruns.db

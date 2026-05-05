@@ -12,12 +12,14 @@ import argparse
 import json
 import logging
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from . import models as models_module
+from .benchmark import benchmark
 from .config import load_config, write_config_snapshot
 from .dashboards import make_observer, wandb_session
 from .data.download import download_dataset
@@ -26,6 +28,7 @@ from .data.profile import profile, write_profile
 from .data.split import make_split
 from .data.validate import validate
 from .eval.runner import evaluate_model
+from .features import build_feature_store
 from .logging_setup import configure
 from .paths import make_run_paths
 from .registry.mlflow_registry import (
@@ -57,6 +60,14 @@ def apply_smoke_overrides(cfg_raw: dict) -> dict:
     cfg_raw["tuning"]["timeout_seconds_per_model"] = 60
     cfg_raw["models"]["bpr"]["epochs"] = 3
     cfg_raw["models"]["als"]["iterations"] = 5
+    cfg_raw["models"]["lgbm"]["n_estimators"] = 60
+    cfg_raw["models"]["lgbm"]["num_leaves"] = 31
+    # In smoke mode, skip lgbm tuning entirely — defaults are already fast.
+    cfg_raw["tuning"]["models_to_tune"] = [
+        m for m in cfg_raw["tuning"]["models_to_tune"] if m != "lgbm"
+    ]
+    cfg_raw["benchmark"]["n_users_to_score"] = 50
+    cfg_raw["benchmark"]["candidates_per_user"] = 500
     return cfg_raw
 
 
@@ -108,6 +119,9 @@ def main(argv: list[str] | None = None) -> int:
     primary = sel_cfg["objective"]
     direction = sel_cfg["direction"]
 
+    # Feature store needed by LightGBM (and ignored by other models).
+    feature_store = build_feature_store(ds, train_positives=train_pos)
+
     tuning_results: dict[str, dict] = {}
     if cfg["tuning"]["enabled"] and not args.skip_tuning:
         for model_name in cfg["tuning"]["models_to_tune"]:
@@ -129,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
                 sampled_negatives=eval_cfg["sampled_negatives"],
                 sampler=cfg["tuning"]["sampler"],
                 pruner=cfg["tuning"]["pruner"],
+                feature_store=feature_store,
             )
             write_tuning_summary(tr, paths.tuning_dir)
             tuning_results[model_name] = {
@@ -140,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
     setup_tracking(cfg["registry"]["tracking_uri"], cfg["registry"]["experiment_name"])
 
     all_results: list[dict] = []
+    benchmark_results: list[dict] = []
+    feature_importance_payload: dict | None = None
     train_plus_val = pd.concat([splits.train, splits.val], ignore_index=True)
 
     with wandb_session(cfg.raw, paths.run_id) as wb_run:
@@ -157,8 +174,11 @@ def main(argv: list[str] | None = None) -> int:
                     num_users=ds.num_users,
                     num_items=ds.num_items,
                     seed=cfg.seed,
+                    feature_store=feature_store,
                 )
+                fit_t0 = time.perf_counter()
                 model.fit(train_pos, observer=observer)
+                fit_seconds = time.perf_counter() - fit_t0
 
                 val_eval = evaluate_model(
                     model,
@@ -204,6 +224,35 @@ def main(argv: list[str] | None = None) -> int:
                         | {f"{model_name}/test/{k}": v for k, v in test_eval.metrics.items()}
                     )
 
+                # Latency benchmark for batch production planning.
+                if cfg["benchmark"].get("enabled"):
+                    bench = benchmark(
+                        model_name=model_name,
+                        fit_seconds=fit_seconds,
+                        model=model,
+                        num_users=ds.num_users,
+                        num_items=ds.num_items,
+                        candidates_per_user=cfg["benchmark"]["candidates_per_user"],
+                        n_users_to_score=cfg["benchmark"]["n_users_to_score"],
+                        seed=cfg.seed,
+                    ).to_dict()
+                    benchmark_results.append(bench)
+                    log.info(
+                        "%s bench: fit=%.2fs  score p50=%.2fms  throughput=%.0f users/s  size=%.2fMB",
+                        model_name, bench["fit_seconds"], bench["score_latency_p50_ms"],
+                        bench["throughput_users_per_sec"], bench["serialized_mb"],
+                    )
+
+                # Feature importance — only the LGBM model exposes it.
+                if model_name == "lgbm" and hasattr(model, "feature_importance"):
+                    fi = model.feature_importance()
+                    if fi is not None:
+                        feature_importance_payload = {
+                            "names": list(fi["names"]),
+                            "gain": [float(x) for x in fi["gain"]],
+                            "split": [float(x) for x in fi["split"]],
+                        }
+
                 all_results.append({
                     "name": model_name,
                     "params": params,
@@ -240,6 +289,13 @@ def main(argv: list[str] | None = None) -> int:
         registered_model_name=cfg["registry"]["registered_model_name"],
     )
 
+    # Persist auxiliary artifacts.
+    with (paths.root / "benchmark.json").open("w") as f:
+        json.dump(benchmark_results, f, indent=2)
+    if feature_importance_payload is not None:
+        with (paths.root / "feature_importance.json").open("w") as f:
+            json.dump(feature_importance_payload, f, indent=2)
+
     render(
         run_id=paths.run_id,
         config=cfg.raw,
@@ -254,6 +310,8 @@ def main(argv: list[str] | None = None) -> int:
         registered_version=registered_version,
         out_html=paths.report_html,
         out_md=paths.report_md,
+        benchmark_results=benchmark_results,
+        feature_importance=feature_importance_payload,
     )
 
     latest = Path("artifacts/reports")
