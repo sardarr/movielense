@@ -8,12 +8,22 @@ One command runs the full experiment: download data, validate, profile, split, t
 
 ```bash
 make sync     # install deps (uses uv, pins Python 3.12)
-make run      # run the full pipeline
+make run      # run the full pipeline (default: ml-100k)
 make ui       # launch MLflow UI at http://localhost:5000
 make test     # run the test suite
 ```
 
 Outputs land in `artifacts/` and the MLflow registry at `mlruns.db`.
+
+## Larger dataset (ML-1M)
+
+For 1M ratings × 6K users × 3.7K items:
+
+```bash
+uv run python -m movielense.run --config config.ml-1m.yaml
+```
+
+Same models, same metrics, longer training. Tuning is off by default in this config because each trial takes minutes on the full set; flip `tuning.enabled` to true if you have a budget.
 
 ## Dashboards
 

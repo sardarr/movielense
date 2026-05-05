@@ -1,0 +1,110 @@
+# Larger MovieLens variant: 1M ratings, 6040 users, 3706 items.
+# Same model set, same metrics — just more data and longer training.
+#
+#   uv run python -m movielense.run --config config.ml-1m.yaml
+
+seed: 42
+run_name: null
+
+dataset:
+  name: ml-1m
+  url: https://files.grouplens.org/datasets/movielens/ml-1m.zip
+  raw_dir: data/raw
+  processed_dir: data/processed
+  min_user_interactions: 5
+  min_item_interactions: 5
+
+split:
+  strategy: temporal_per_user
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  rating_threshold: 4.0
+
+eval:
+  ks: [5, 10, 20]
+  primary_metric: ndcg@10
+  candidate_strategy: full
+  sampled_negatives: 100
+
+models:
+  random: {}
+  popularity: {}
+  itemknn:
+    k: 100
+    similarity: cosine
+  als:
+    factors: 128
+    regularization: 0.05
+    iterations: 20
+    alpha: 40.0
+  bpr:
+    factors: 128
+    lr: 0.005
+    reg: 0.01
+    epochs: 25
+    batch_size: 4096
+    device: auto
+  lgbm:
+    n_neg_per_pos: 4
+    num_leaves: 63
+    learning_rate: 0.05
+    n_estimators: 300
+    min_child_samples: 40
+    reg_lambda: 0.0
+  sasrec:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-6
+    epochs: 50
+    batch_size: 256
+    device: auto
+
+tuning:
+  # Disabled by default for ML-1M because each trial takes minutes; enable
+  # selectively when you have a budget.
+  enabled: false
+  trials_per_model: 8
+  timeout_seconds_per_model: 600
+  models_to_tune: [itemknn, als, bpr]
+  pruner: median
+  sampler: tpe
+
+selection:
+  objective: ndcg@10
+  direction: maximize
+  baselines: [random, popularity]
+
+benchmark:
+  enabled: true
+  n_users_to_score: 500
+  candidates_per_user: 1000
+
+feature_importance:
+  enabled: true
+  shap_sample_size: 500
+  top_n: 20
+
+registry:
+  tracking_uri: sqlite:///mlruns.db
+  experiment_name: movielense-1m
+  registered_model_name: movielense-1m-best
+
+dashboards:
+  mlflow:
+    enabled: true
+    ui_port: 5000
+  wandb:
+    enabled: false
+    project: movielense-1m
+    entity: null
+    mode: online
+
+report:
+  output_dir: artifacts/reports
+  html_filename: dashboard.html
+  markdown_filename: research_report.md

@@ -23,7 +23,7 @@ from .benchmark import benchmark
 from .config import load_config, write_config_snapshot
 from .dashboards import make_observer, wandb_session
 from .data.download import download_dataset
-from .data.load import load_movielens_100k
+from .data.load import load_movielens
 from .data.profile import profile, write_profile
 from .data.split import make_split
 from .data.validate import validate
@@ -88,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
 
     raw_dir = Path(cfg["dataset"]["raw_dir"])
     data_dir = download_dataset(cfg["dataset"]["url"], raw_dir)
-    ds = load_movielens_100k(data_dir)
+    ds = load_movielens(cfg["dataset"]["name"], data_dir)
 
     vr = validate(
         ds,

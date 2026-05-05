@@ -5,8 +5,12 @@ seed: 42
 run_name: null  # null -> auto: ISO timestamp + short uuid
 
 dataset:
+  # Switch between ml-100k (~100K ratings, 943x1682) and ml-1m (~1M ratings, 6040x3706).
+  # Both share the same loader output shape, so all models work on either.
   name: ml-100k
   url: https://files.grouplens.org/datasets/movielens/ml-100k.zip
+  # name: ml-1m
+  # url: https://files.grouplens.org/datasets/movielens/ml-1m.zip
   raw_dir: data/raw
   processed_dir: data/processed
   min_user_interactions: 5

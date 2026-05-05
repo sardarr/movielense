@@ -41,20 +41,27 @@ def download_dataset(url: str, raw_dir: Path) -> Path:
     digest = _sha256(zip_path)
     log.info("dataset zip sha256=%s", digest)
 
-    inner = raw_dir / zip_path.stem  # e.g. ml-100k
+    inner = raw_dir / zip_path.stem  # e.g. ml-100k, ml-1m
     if not inner.exists() or not any(inner.iterdir()):
         log.info("Extracting %s", zip_path)
         with zipfile.ZipFile(zip_path) as zf:
             zf.extractall(raw_dir)
 
-    if not inner.exists():
-        # Some zips extract into a different directory; find any folder with u.data
+    # Each MovieLens variant has a different "marker" file. Accept any of them
+    # so we can extend to ml-10m / ml-25m without touching this code again.
+    marker_files = ("u.data", "ratings.dat", "ratings.csv")
+
+    def _has_marker(d: Path) -> bool:
+        return d.exists() and any((d / m).exists() for m in marker_files)
+
+    if not _has_marker(inner):
         for sub in raw_dir.iterdir():
-            if sub.is_dir() and (sub / "u.data").exists():
+            if sub.is_dir() and _has_marker(sub):
                 inner = sub
                 break
 
-    if not (inner / "u.data").exists():
-        raise FileNotFoundError(f"Expected u.data in {inner}")
-
+    if not _has_marker(inner):
+        raise FileNotFoundError(
+            f"No MovieLens marker file ({', '.join(marker_files)}) under {inner}"
+        )
     return inner
