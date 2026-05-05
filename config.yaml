@@ -50,12 +50,23 @@ models:
     n_estimators: 200
     min_child_samples: 20
     reg_lambda: 0.0
+  sasrec:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 50
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-6
+    epochs: 50
+    batch_size: 128
+    device: auto
 
 tuning:
   enabled: true
   trials_per_model: 12
   timeout_seconds_per_model: 300
-  models_to_tune: [itemknn, als, bpr, lgbm]
+  models_to_tune: [itemknn, als, bpr, lgbm, sasrec]
   pruner: median
   sampler: tpe
 

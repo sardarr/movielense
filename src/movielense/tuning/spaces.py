@@ -48,9 +48,22 @@ def lgbm_space(trial: optuna.Trial) -> dict:
     }
 
 
+def sasrec_space(trial: optuna.Trial) -> dict:
+    return {
+        "d_model": trial.suggest_categorical("d_model", [32, 64]),
+        "num_blocks": trial.suggest_int("num_blocks", 1, 3),
+        "dropout": trial.suggest_float("dropout", 0.05, 0.4),
+        "lr": trial.suggest_float("lr", 1e-4, 5e-3, log=True),
+        "weight_decay": trial.suggest_float("weight_decay", 1e-7, 1e-4, log=True),
+        "epochs": trial.suggest_int("epochs", 10, 40),
+        "batch_size": trial.suggest_categorical("batch_size", [64, 128, 256]),
+    }
+
+
 SPACES: dict[str, Callable[[optuna.Trial], dict]] = {
     "itemknn": itemknn_space,
     "als": als_space,
     "bpr": bpr_space,
     "lgbm": lgbm_space,
+    "sasrec": sasrec_space,
 }

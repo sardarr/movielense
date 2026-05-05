@@ -12,8 +12,8 @@ def _toy_train(num_users: int = 8, num_items: int = 12, seed: int = 0) -> pd.Dat
     rows = []
     for u in range(num_users):
         items = rng.choice(num_items, size=4, replace=False)
-        for i in items:
-            rows.append({"user_id": u, "item_id": int(i), "rating": 5.0, "timestamp": 1})
+        for ts, i in enumerate(items):
+            rows.append({"user_id": u, "item_id": int(i), "rating": 5.0, "timestamp": ts})
     return pd.DataFrame(rows)
 
 
@@ -46,3 +46,13 @@ def test_als():
 
 def test_bpr_runs():
     _check_model("bpr", {"factors": 8, "lr": 0.01, "reg": 0.01, "epochs": 2, "batch_size": 8, "device": "cpu"})
+
+
+def test_sasrec_runs():
+    _check_model(
+        "sasrec",
+        {
+            "d_model": 16, "num_heads": 1, "num_blocks": 1, "max_len": 6,
+            "dropout": 0.0, "lr": 0.01, "epochs": 2, "batch_size": 4, "device": "cpu",
+        },
+    )

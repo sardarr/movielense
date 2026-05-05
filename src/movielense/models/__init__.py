@@ -4,6 +4,7 @@ from .baselines import PopularityRecommender, RandomRecommender
 from .bpr import BPRRecommender
 from .item_knn import ItemKNNRecommender
 from .lgbm import LGBMRankerRecommender
+from .sasrec import SASRecRecommender
 
 
 def build(
@@ -36,6 +37,13 @@ def build(
             seed=seed,
             **params,
         )
+    if name == "sasrec":
+        return SASRecRecommender(
+            num_users=num_users,
+            num_items=num_items,
+            seed=seed,
+            **params,
+        )
     raise ValueError(f"unknown model: {name}")
 
 
@@ -47,5 +55,6 @@ __all__ = [
     "ItemKNNRecommender",
     "ALSRecommender",
     "LGBMRankerRecommender",
+    "SASRecRecommender",
     "build",
 ]

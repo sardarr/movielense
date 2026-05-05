@@ -62,9 +62,11 @@ def apply_smoke_overrides(cfg_raw: dict) -> dict:
     cfg_raw["models"]["als"]["iterations"] = 5
     cfg_raw["models"]["lgbm"]["n_estimators"] = 60
     cfg_raw["models"]["lgbm"]["num_leaves"] = 31
-    # In smoke mode, skip lgbm tuning entirely — defaults are already fast.
+    cfg_raw["models"]["sasrec"]["epochs"] = 5
+    cfg_raw["models"]["sasrec"]["batch_size"] = 64
+    # In smoke mode, skip slow tuning of lgbm and sasrec — defaults are good enough.
     cfg_raw["tuning"]["models_to_tune"] = [
-        m for m in cfg_raw["tuning"]["models_to_tune"] if m != "lgbm"
+        m for m in cfg_raw["tuning"]["models_to_tune"] if m not in ("lgbm", "sasrec")
     ]
     cfg_raw["benchmark"]["n_users_to_score"] = 50
     cfg_raw["benchmark"]["candidates_per_user"] = 500

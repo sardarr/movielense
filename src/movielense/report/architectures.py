@@ -71,4 +71,25 @@ ARCHITECTURE: dict[str, dict[str, str]] = {
         ),
         "interpretability": "high — feature importance (gain, split, SHAP) directly available",
     },
+    "sasrec": {
+        "type": "Sequential transformer (Self-Attentive Sequential Recommendation, PyTorch)",
+        "input": (
+            "per-user time-ordered item sequence (truncated to max_len most-recent positives); "
+            "uses interaction timestamps as the ordering signal"
+        ),
+        "training": (
+            "stack of N causal-masked self-attention blocks with learned positional embeddings; "
+            "per-position BPR loss: maximize sigmoid(<h_t, V[s_{t+1}]> - <h_t, V[neg]>); "
+            "Adam over batched user sequences"
+        ),
+        "inference": (
+            "encode each user's training history once, cache the final hidden state h_u; "
+            "score(u, i) = <h_u, V[i]> — same dot-product cost as ALS / BPR after caching"
+        ),
+        "use_case": (
+            "captures sequential patterns and recency that bag-of-interactions models (ALS, BPR) ignore; "
+            "strong when item discovery follows trends or session structure"
+        ),
+        "interpretability": "low — attention weights can be probed but require additional tooling",
+    },
 }
