@@ -1,21 +1,21 @@
 name: pipeline
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: "0 6 * * 1"  # weekly Monday 06:00 UTC
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pipeline-${{ github.ref }}
   cancel-in-progress: false
 
+# Smoke-mode pipeline runs as a sanity check on demand or weekly. It does NOT
+# publish to GitHub Pages — Pages is served from the manually-committed
+# /docs folder so the live dashboard reflects real research runs, not the
+# CI ml-100k smoke output.
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
@@ -47,24 +47,3 @@ jobs:
             mlruns.db
             mlruns/
           if-no-files-found: warn
-
-      - name: prepare pages site
-        run: |
-          mkdir -p _site
-          cp artifacts/reports/dashboard.html _site/index.html
-          cp artifacts/reports/research_report.md _site/research_report.md || true
-
-      - name: upload pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-  publish-pages:
-    needs: run-pipeline
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4

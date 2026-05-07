@@ -27,6 +27,13 @@
 </head>
 <body>
 <h1>MovieLense — Recommendation Research Report</h1>
+<div style="background:#e7f5ff;border-left:4px solid #0b7285;padding:10px 14px;margin:14px 0;border-radius:4px;font-size:13px">
+  <strong>Statistical significance (paired test on n=6038 test users, same sampled negatives per user):</strong>
+  <ul style="margin:6px 0 0 18px">
+    <li><code>sasrec_content</code> vs <code>sasrec</code>: mean diff = <strong>+0.0033</strong> NDCG@10. Paired t p=0.20, Wilcoxon p=0.18, bootstrap 95% CI <strong>[−0.0016, +0.0086]</strong> &mdash; <strong>not significant</strong>. The MiniLM content lift is statistical noise; win/tie/loss is 22.7% / 55.1% / 22.2%.</li>
+    <li><code>sasrec_content_only</code> vs <code>sasrec</code>: mean diff = <strong>−0.1696</strong> NDCG@10. Paired t p≈10<sup>−281</sup>, bootstrap 95% CI [−0.178, −0.160] &mdash; <strong>highly significant</strong>. Content alone cannot replace collaborative id-embeddings on ML-1M.</li>
+  </ul>
+</div>
 <div class="meta">
   Run <code>ncf-protocol</code> &middot; generated 2026-05-07 16:39:30Z &middot;
   primary metric <span class="pill">ndcg@10</span>
