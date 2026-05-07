@@ -1,0 +1,115 @@
+# Reproduce the NCF / SASRec evaluation protocol on MovieLens-1M:
+#   - leave-one-out per user (last positive = test, second-last = val)
+#   - 1 positive ranked against 100 sampled negatives per user
+#   - HR@10 / NDCG@10 reported (ndcg@10 is the primary metric)
+#
+# Use this config to compare against published numbers in:
+#   He et al., "Neural Collaborative Filtering" (WWW 2017)
+#   Kang & McAuley, "Self-Attentive Sequential Recommendation" (ICDM 2018)
+#
+#   uv run python -m movielense.run --config config.ml-1m-ncf.yaml
+
+seed: 42
+run_name: ncf-protocol
+
+dataset:
+  name: ml-1m
+  url: https://files.grouplens.org/datasets/movielens/ml-1m.zip
+  raw_dir: data/raw
+  processed_dir: data/processed
+  min_user_interactions: 5
+  min_item_interactions: 5
+
+split:
+  strategy: leave_one_out
+  rating_threshold: 4.0
+  # Ratios kept here so the config schema is consistent; ignored for leave_one_out.
+  train_ratio: 0.0
+  val_ratio: 0.0
+  test_ratio: 0.0
+
+eval:
+  ks: [5, 10, 20]
+  primary_metric: ndcg@10
+  candidate_strategy: sampled
+  sampled_negatives: 100
+
+models:
+  random: {}
+  popularity: {}
+  itemknn:
+    k: 100
+    similarity: cosine
+  als:
+    factors: 64
+    regularization: 0.05
+    iterations: 20
+    alpha: 40.0
+  bpr:
+    factors: 64
+    lr: 0.001
+    reg: 1.0e-5
+    epochs: 30
+    batch_size: 4096
+    device: auto
+  lgbm:
+    n_neg_per_pos: 4
+    num_leaves: 63
+    learning_rate: 0.05
+    n_estimators: 200
+    min_child_samples: 40
+    reg_lambda: 0.0
+  sasrec:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-6
+    epochs: 200
+    batch_size: 256
+    device: auto
+
+tuning:
+  enabled: false
+  trials_per_model: 8
+  timeout_seconds_per_model: 600
+  models_to_tune: [itemknn, als, bpr]
+  pruner: median
+  sampler: tpe
+
+selection:
+  objective: ndcg@10
+  direction: maximize
+  baselines: [random, popularity]
+
+benchmark:
+  enabled: true
+  n_users_to_score: 200
+  candidates_per_user: 1000
+
+feature_importance:
+  enabled: true
+  shap_sample_size: 500
+  top_n: 20
+
+registry:
+  tracking_uri: sqlite:///mlruns.db
+  experiment_name: movielense-1m-ncf
+  registered_model_name: movielense-1m-ncf-best
+
+dashboards:
+  mlflow:
+    enabled: true
+    ui_port: 5000
+  wandb:
+    enabled: false
+    project: movielense-1m-ncf
+    entity: null
+    mode: online
+
+report:
+  output_dir: artifacts/reports
+  html_filename: dashboard.html
+  markdown_filename: research_report.md

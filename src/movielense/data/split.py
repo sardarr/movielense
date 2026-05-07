@@ -82,14 +82,53 @@ def temporal_per_user_split(
     return Splits(train=train, val=val, test=test, rating_threshold=rating_threshold)
 
 
+def leave_one_out_split(ratings: pd.DataFrame, *, rating_threshold: float) -> Splits:
+    """NCF / SASRec-style leave-one-out evaluation.
+
+    Per user, sort positives by timestamp ascending. Hold out the single
+    most-recent positive as test and the second-most-recent as val. Everything
+    else (including sub-threshold ratings) goes to train. Users with fewer
+    than 2 positives keep all interactions in train.
+    """
+    sorted_df = ratings.sort_values(["user_id", "timestamp"])
+    train_idx: list[int] = []
+    val_idx: list[int] = []
+    test_idx: list[int] = []
+
+    for _, group in sorted_df.groupby("user_id", sort=False):
+        idx = group.index.to_numpy()
+        is_pos = (group["rating"] >= rating_threshold).to_numpy()
+        pos_idx = idx[is_pos]
+        held: set[int] = set()
+        if len(pos_idx) >= 1:
+            held.add(int(pos_idx[-1]))
+            test_idx.append(int(pos_idx[-1]))
+        if len(pos_idx) >= 2:
+            held.add(int(pos_idx[-2]))
+            val_idx.append(int(pos_idx[-2]))
+        for i in idx:
+            if int(i) not in held:
+                train_idx.append(int(i))
+
+    train = ratings.loc[train_idx].reset_index(drop=True)
+    val = ratings.loc[val_idx].reset_index(drop=True)
+    test = ratings.loc[test_idx].reset_index(drop=True)
+    log.info(
+        "leave-one-out split: train=%d val=%d test=%d", len(train), len(val), len(test)
+    )
+    return Splits(train=train, val=val, test=test, rating_threshold=rating_threshold)
+
+
 def make_split(ratings: pd.DataFrame, cfg: dict) -> Splits:
     strategy = cfg.get("strategy", "temporal_per_user")
-    if strategy != "temporal_per_user":
-        raise NotImplementedError(f"split strategy {strategy} not implemented")
-    return temporal_per_user_split(
-        ratings,
-        train_ratio=cfg["train_ratio"],
-        val_ratio=cfg["val_ratio"],
-        test_ratio=cfg["test_ratio"],
-        rating_threshold=cfg["rating_threshold"],
-    )
+    if strategy == "temporal_per_user":
+        return temporal_per_user_split(
+            ratings,
+            train_ratio=cfg["train_ratio"],
+            val_ratio=cfg["val_ratio"],
+            test_ratio=cfg["test_ratio"],
+            rating_threshold=cfg["rating_threshold"],
+        )
+    if strategy == "leave_one_out":
+        return leave_one_out_split(ratings, rating_threshold=cfg["rating_threshold"])
+    raise NotImplementedError(f"split strategy {strategy} not implemented")

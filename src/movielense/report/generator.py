@@ -133,6 +133,23 @@ def render(
                 "marker": {"color": "#0b7285"},
             }
 
+    ds_cfg = config.get("dataset", {}) or {}
+    sp_cfg = config.get("split", {}) or {}
+    ev_cfg = config.get("eval", {}) or {}
+    data_setup = {
+        "dataset_name": ds_cfg.get("name", "?"),
+        "min_user_interactions": ds_cfg.get("min_user_interactions", "?"),
+        "min_item_interactions": ds_cfg.get("min_item_interactions", "?"),
+        "rating_threshold": sp_cfg.get("rating_threshold", "?"),
+        "split_strategy": sp_cfg.get("strategy", "?"),
+        "train_ratio": sp_cfg.get("train_ratio"),
+        "val_ratio": sp_cfg.get("val_ratio"),
+        "test_ratio": sp_cfg.get("test_ratio"),
+        "candidate_strategy": ev_cfg.get("candidate_strategy", "full_catalog"),
+        "sampled_negatives": ev_cfg.get("sampled_negatives"),
+        "ks": ev_cfg.get("ks", []),
+    }
+
     template = env.get_template("dashboard.html.j2")
     html = template.render(
         run_id=run_id,
@@ -142,6 +159,7 @@ def render(
         winner=winner,
         profile=profile,
         splits=splits_summary,
+        data_setup=data_setup,
         model_rows=model_rows,
         metric_columns=metric_columns,
         metric_bars=metric_bars,

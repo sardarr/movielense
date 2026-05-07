@@ -321,6 +321,11 @@ def main(argv: list[str] | None = None) -> int:
     (latest / "dashboard.html").write_text(paths.report_html.read_text())
     (latest / "research_report.md").write_text(paths.report_md.read_text())
 
+    # GitHub Pages source — served from main:/docs.
+    pages = Path("docs")
+    pages.mkdir(parents=True, exist_ok=True)
+    (pages / "index.html").write_text(paths.report_html.read_text())
+
     log.info("done. winner=%s  %s=%.4f",
              winner["name"], primary, winner["test_metrics"][primary])
     log.info("artifacts: %s", paths.root)

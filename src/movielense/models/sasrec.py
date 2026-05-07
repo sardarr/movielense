@@ -271,9 +271,11 @@ class SASRecRecommender(Recommender):
             for start in range(0, x.shape[0], 256):
                 batch = x[start:start + 256]
                 h = self.module(batch)  # (B, L, d)
-                last_idx = (batch != 0).long().sum(dim=1) - 1
-                last_idx = last_idx.clamp(min=0)
-                h_last = h[torch.arange(batch.shape[0], device=self.device), last_idx]
+                # Sequences are left-padded, so the last real item is always at
+                # position L-1 (regardless of how many real items the user has).
+                # Earlier this used (batch != 0).sum() - 1 which incorrectly
+                # indexed into the padding region for short users.
+                h_last = h[:, -1, :]
                 for k, u in enumerate(user_order[start:start + batch.shape[0]]):
                     H[u] = h_last[k].cpu().numpy()
 

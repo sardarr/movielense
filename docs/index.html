@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>MovieLense — Run ncf-protocol</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root { --fg: #1a1a1a; --muted: #666; --bg: #fafafa; --panel: #fff; --accent: #0b7285; --winner: #2b8a3e; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--fg); background: var(--bg); margin: 0; padding: 24px; }
+  h1 { margin-top: 0; }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 4px; margin-top: 36px; }
+  .section { background: var(--panel); padding: 16px 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 16px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .winner { color: var(--winner); font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 6px 10px; text-align: right; border-bottom: 1px solid #eee; font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; }
+  tr.winner-row { background: #ebfbee; }
+  tr.baseline { color: var(--muted); font-style: italic; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e7f5ff; color: var(--accent); font-size: 12px; margin-right: 4px; }
+  pre { background: #f1f3f5; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .stat { background: #f8f9fa; padding: 12px; border-radius: 6px; }
+  .stat .label { font-size: 12px; color: var(--muted); }
+  .stat .value { font-size: 22px; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>MovieLense — Recommendation Research Report</h1>
+<div class="meta">
+  Run <code>ncf-protocol</code> &middot; generated 2026-05-07 15:38:20Z &middot;
+  primary metric <span class="pill">ndcg@10</span>
+  selection: <span class="winner">sasrec</span>
+</div>
+<div style="background:#fff3bf;border-left:4px solid #f59f00;padding:10px 14px;margin:14px 0;border-radius:4px;font-size:13px">
+  <strong>Note about SASRec numbers:</strong> this run used a pre-fix version of <code>SASRecRecommender.embed_users</code> that incorrectly indexed into the padding region for short user histories (left-padded sequences). The fix (<code>h[:, -1, :]</code>) is in <code>main</code> but has not been re-run yet — SASRec metrics here are likely a slight underestimate.
+</div>
+
+<div class="section">
+<h2>Dataset profile</h2>
+<div class="grid">
+  <div class="stat"><div class="label">Users</div><div class="value">6040</div></div>
+  <div class="stat"><div class="label">Items</div><div class="value">3706</div></div>
+  <div class="stat"><div class="label">Interactions</div><div class="value">1000209</div></div>
+  <div class="stat"><div class="label">Sparsity</div><div class="value">0.9553</div></div>
+</div>
+<div id="rating-hist" style="height: 280px;"></div>
+<div id="user-deg" style="height: 280px;"></div>
+</div>
+
+<div class="section">
+<h2>Data setup &amp; evaluation protocol</h2>
+<p class="meta">The two knobs that most affect the leaderboard: how train/val/test is carved out, and how each model is scored at evaluation time.</p>
+<div class="grid">
+  <div class="stat"><div class="label">Dataset</div><div class="value" style="font-size:16px">ml-1m</div></div>
+  <div class="stat"><div class="label">Min interactions (user / item)</div><div class="value" style="font-size:16px">5 / 5</div></div>
+  <div class="stat"><div class="label">Rating &ge; threshold = positive</div><div class="value" style="font-size:16px">4.0</div></div>
+  <div class="stat"><div class="label">Split strategy</div><div class="value" style="font-size:16px">leave_one_out</div></div>
+  <div class="stat"><div class="label">Candidate strategy</div><div class="value" style="font-size:16px">sampled (100 negs)</div></div>
+  <div class="stat"><div class="label">Eval cutoffs (K)</div><div class="value" style="font-size:16px">[5, 10, 20]</div></div>
+</div>
+<details style="margin-top:12px"><summary>What these mean</summary>
+<ul>
+  <li><strong>Split strategy</strong> —
+    
+    per user, the single most-recent positive is test, second-most-recent is val, everything else is train (this run — published NCF / SASRec protocol).
+    
+  </li>
+  <li><strong>Candidate strategy</strong> — <code>full_catalog</code>: rank every unseen item; metrics are pessimistic and reward popularity-aware models. <code>sampled</code>: rank the held-out positive against N random negatives; metrics are permissive and reward expressive models.</li>
+  <li><strong>Rating threshold</strong> — only ratings &ge; this count as positive interactions for ranking metrics; lower-rated rows still go into training as implicit signal.</li>
+</ul>
+</details>
+<h3 style="margin-top:18px">Resulting splits</h3>
+<table>
+  <thead><tr><th>Split</th><th>Interactions</th><th>Users</th></tr></thead>
+  <tbody>
+    <tr><td>Train</td><td>988134</td><td>6040</td></tr>
+    <tr><td>Val</td><td>6037</td><td>6037</td></tr>
+    <tr><td>Test</td><td>6038</td><td>6038</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="section">
+<h2>Model comparison (test set)</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Model</th>
+      <th>hr@5</th><th>hr@10</th><th>hr@20</th><th>precision@5</th><th>precision@10</th><th>precision@20</th><th>recall@5</th><th>recall@10</th><th>recall@20</th><th>map@5</th><th>map@10</th><th>map@20</th><th>mrr@5</th><th>mrr@10</th><th>mrr@20</th><th>ndcg@5</th><th>ndcg@10</th><th>ndcg@20</th>
+    </tr>
+  </thead>
+  <tbody>
+    
+    <tr class="baseline ">
+      <td>random</td>
+      <td>0.0474</td><td>0.0967</td><td>0.1913</td><td>0.0095</td><td>0.0097</td><td>0.0096</td><td>0.0474</td><td>0.0967</td><td>0.1913</td><td>0.0216</td><td>0.0281</td><td>0.0345</td><td>0.0216</td><td>0.0281</td><td>0.0345</td><td>0.0280</td><td>0.0438</td><td>0.0674</td>
+    </tr>
+    
+    <tr class="baseline ">
+      <td>popularity</td>
+      <td>0.3389</td><td>0.4983</td><td>0.6762</td><td>0.0678</td><td>0.0498</td><td>0.0338</td><td>0.3389</td><td>0.4983</td><td>0.6762</td><td>0.1846</td><td>0.2057</td><td>0.2179</td><td>0.1846</td><td>0.2057</td><td>0.2179</td><td>0.2227</td><td>0.2741</td><td>0.3189</td>
+    </tr>
+    
+    <tr class="">
+      <td>itemknn</td>
+      <td>0.4415</td><td>0.6222</td><td>0.7834</td><td>0.0883</td><td>0.0622</td><td>0.0392</td><td>0.4415</td><td>0.6222</td><td>0.7834</td><td>0.2501</td><td>0.2742</td><td>0.2855</td><td>0.2501</td><td>0.2742</td><td>0.2855</td><td>0.2974</td><td>0.3558</td><td>0.3967</td>
+    </tr>
+    
+    <tr class="">
+      <td>als</td>
+      <td>0.5330</td><td>0.6906</td><td>0.8246</td><td>0.1066</td><td>0.0691</td><td>0.0412</td><td>0.5330</td><td>0.6906</td><td>0.8246</td><td>0.3178</td><td>0.3392</td><td>0.3486</td><td>0.3178</td><td>0.3392</td><td>0.3486</td><td>0.3711</td><td>0.4224</td><td>0.4565</td>
+    </tr>
+    
+    <tr class="">
+      <td>bpr</td>
+      <td>0.4791</td><td>0.6616</td><td>0.8390</td><td>0.0958</td><td>0.0662</td><td>0.0420</td><td>0.4791</td><td>0.6616</td><td>0.8390</td><td>0.2752</td><td>0.2998</td><td>0.3121</td><td>0.2752</td><td>0.2998</td><td>0.3121</td><td>0.3256</td><td>0.3849</td><td>0.4298</td>
+    </tr>
+    
+    <tr class="">
+      <td>lgbm</td>
+      <td>0.4395</td><td>0.6201</td><td>0.7850</td><td>0.0879</td><td>0.0620</td><td>0.0393</td><td>0.4395</td><td>0.6201</td><td>0.7850</td><td>0.2596</td><td>0.2837</td><td>0.2953</td><td>0.2596</td><td>0.2837</td><td>0.2953</td><td>0.3041</td><td>0.3625</td><td>0.4044</td>
+    </tr>
+    
+    <tr class="winner-row">
+      <td>sasrec (winner)</td>
+      <td>0.6721</td><td>0.7976</td><td>0.8942</td><td>0.1344</td><td>0.0798</td><td>0.0447</td><td>0.6721</td><td>0.7976</td><td>0.8942</td><td>0.4633</td><td>0.4801</td><td>0.4869</td><td>0.4633</td><td>0.4801</td><td>0.4869</td><td>0.5154</td><td>0.5560</td><td>0.5805</td>
+    </tr>
+    
+  </tbody>
+</table>
+<div id="metric-bars" style="height: 360px;"></div>
+</div>
+
+
+<div class="section">
+<h2>Models — architecture &amp; training recipe</h2>
+<p class="meta">For each model in the comparison: family, what it consumes at fit time, the training procedure, scoring cost, where it shines, and how readable its decisions are.</p>
+<table>
+  <thead><tr><th>Model</th><th>Type</th><th>Inputs</th><th>Training</th><th>Inference</th><th>Use case</th><th>Interpretability</th></tr></thead>
+  <tbody>
+  
+    <tr>
+      <td><strong>random</strong></td>
+      <td>Baseline (random)</td>
+      <td>none</td>
+      <td>no training — generates a deterministic random score per (user, item) using a hash of seed and user id</td>
+      <td>O(1) per pair</td>
+      <td>sanity-check floor: any real model must beat this</td>
+      <td>n/a</td>
+    </tr>
+  
+    <tr>
+      <td><strong>popularity</strong></td>
+      <td>Baseline (popularity)</td>
+      <td>global item interaction counts on the training split</td>
+      <td>single pass over training data to count interactions per item</td>
+      <td>O(1) lookup per (user, item)</td>
+      <td>strong baseline; hard to beat for users with mainstream taste; provides no personalization</td>
+      <td>trivial — score IS popularity</td>
+    </tr>
+  
+    <tr>
+      <td><strong>itemknn</strong></td>
+      <td>Memory-based collaborative filtering (item-item kNN)</td>
+      <td>binary user-item interaction matrix</td>
+      <td>compute cosine similarity between every pair of items; keep the top-k neighbors per item</td>
+      <td>score(u, i) = sum of sim(i, j) for j in user u's history (sparse vector dot product)</td>
+      <td>transparent neighbor explanations ('because you watched X'); strong on dense items; struggles with cold-start items</td>
+      <td>high — top contributing neighbors per recommendation</td>
+    </tr>
+  
+    <tr>
+      <td><strong>als</strong></td>
+      <td>Matrix factorization (Alternating Least Squares, implicit feedback)</td>
+      <td>user-item interactions weighted with confidence c(u,i) = 1 + alpha * indicator(u liked i)</td>
+      <td>alternate ridge regression: fix item factors, solve for user factors (and vice versa) for K iterations</td>
+      <td>score(u, i) = U[u] @ V[i] (single dot product of factor vectors)</td>
+      <td>fast batch scoring at scale; learned latent factors capture taste similarities; standard production baseline</td>
+      <td>low — latent factors have no semantic labels</td>
+    </tr>
+  
+    <tr>
+      <td><strong>bpr</strong></td>
+      <td>Neural pairwise learning-to-rank (Bayesian Personalized Ranking, PyTorch)</td>
+      <td>implicit feedback as (user, positive_item, sampled_negative_item) triples</td>
+      <td>minimize -log sigmoid(<U[u], V[pos]> - <U[u], V[neg]>) over many epochs with Adam; negatives are uniformly sampled items the user hasn't interacted with</td>
+      <td>score(u, i) = U[u] @ V[i] (dot product of learned embeddings)</td>
+      <td>directly optimizes pairwise ordering, which aligns with ranking metrics like NDCG; matches the goal of top-K recommendation better than rating-prediction MF</td>
+      <td>low — learned embeddings; can be probed via nearest-neighbor inspection</td>
+    </tr>
+  
+    <tr>
+      <td><strong>lgbm</strong></td>
+      <td>Learning-to-rank with gradient-boosted trees (LightGBM LambdaRank)</td>
+      <td>engineered features per (user, item): user side-info (age, gender, occupation), user behavior (interaction count, mean rating, genre preference), item content (genres, release year, popularity, mean rating), and an interaction term (user-item genre affinity)</td>
+      <td>for each user, sample N negatives per positive; train LambdaRank with NDCG metric; trees split features to maximize ranking quality</td>
+      <td>predict relevance for each candidate item via summed leaf contributions across trees</td>
+      <td>supports cold-start (no need for prior interactions if features exist) and is fully interpretable via gain / SHAP; slower at scoring than dot-product models — best when you control candidate-set size upstream</td>
+      <td>high — feature importance (gain, split, SHAP) directly available</td>
+    </tr>
+  
+    <tr>
+      <td><strong>sasrec</strong></td>
+      <td>Sequential transformer (Self-Attentive Sequential Recommendation, PyTorch)</td>
+      <td>per-user time-ordered item sequence (truncated to max_len most-recent positives); uses interaction timestamps as the ordering signal</td>
+      <td>stack of N causal-masked self-attention blocks with learned positional embeddings; per-position BPR loss: maximize sigmoid(<h_t, V[s_{t+1}]> - <h_t, V[neg]>); Adam over batched user sequences</td>
+      <td>encode each user's training history once, cache the final hidden state h_u; score(u, i) = <h_u, V[i]> — same dot-product cost as ALS / BPR after caching</td>
+      <td>captures sequential patterns and recency that bag-of-interactions models (ALS, BPR) ignore; strong when item discovery follows trends or session structure</td>
+      <td>low — attention weights can be probed but require additional tooling</td>
+    </tr>
+  
+  </tbody>
+</table>
+</div>
+
+
+
+<div class="section">
+<h2>Latency benchmark (batch production)</h2>
+<p class="meta">
+  Per-model fit time, scoring latency (median &amp; p95) for 1000 candidates per user across 200 sampled users, throughput, and serialized model size.
+</p>
+<table>
+  <thead><tr><th>Model</th><th>Fit (s)</th><th>p50 (ms/user)</th><th>p95 (ms/user)</th><th>Throughput (users/s)</th><th>Size (MB)</th></tr></thead>
+  <tbody>
+  
+    <tr>
+      <td><strong>random</strong></td>
+      <td>0.00</td>
+      <td>0.01</td>
+      <td>0.03</td>
+      <td>90622</td>
+      <td>0.00</td>
+    </tr>
+  
+    <tr>
+      <td><strong>popularity</strong></td>
+      <td>0.01</td>
+      <td>0.00</td>
+      <td>0.00</td>
+      <td>1182557</td>
+      <td>0.03</td>
+    </tr>
+  
+    <tr>
+      <td><strong>itemknn</strong></td>
+      <td>0.89</td>
+      <td>0.06</td>
+      <td>0.10</td>
+      <td>16139</td>
+      <td>7.01</td>
+    </tr>
+  
+    <tr>
+      <td><strong>als</strong></td>
+      <td>8.94</td>
+      <td>0.02</td>
+      <td>0.02</td>
+      <td>56721</td>
+      <td>2.38</td>
+    </tr>
+  
+    <tr>
+      <td><strong>bpr</strong></td>
+      <td>32.06</td>
+      <td>0.02</td>
+      <td>0.03</td>
+      <td>55898</td>
+      <td>4.76</td>
+    </tr>
+  
+    <tr>
+      <td><strong>lgbm</strong></td>
+      <td>124.41</td>
+      <td>7.76</td>
+      <td>12.03</td>
+      <td>119</td>
+      <td>3.40</td>
+    </tr>
+  
+    <tr>
+      <td><strong>sasrec</strong></td>
+      <td>653.95</td>
+      <td>0.02</td>
+      <td>0.05</td>
+      <td>41118</td>
+      <td>5.15</td>
+    </tr>
+  
+  </tbody>
+</table>
+<div id="bench-throughput" style="height: 320px;"></div>
+</div>
+
+
+
+<div class="section">
+<h2>Feature importance (LightGBM gain)</h2>
+<p class="meta">Top 20 features ranked by their total contribution to the LambdaRank loss reduction.</p>
+<div id="feature-importance" style="height: 480px;"></div>
+</div>
+
+
+
+
+<div class="section">
+<h2>Reproducibility</h2>
+<p>Every input to this run is captured below; re-running with the same config + seed yields identical results.</p>
+<details><summary>Show config snapshot</summary>
+<pre>seed: 42
+run_name: ncf-protocol
+dataset:
+  name: ml-1m
+  url: https://files.grouplens.org/datasets/movielens/ml-1m.zip
+  raw_dir: data/raw
+  processed_dir: data/processed
+  min_user_interactions: 5
+  min_item_interactions: 5
+split:
+  strategy: leave_one_out
+  rating_threshold: 4.0
+  train_ratio: 0.0
+  val_ratio: 0.0
+  test_ratio: 0.0
+eval:
+  ks:
+  - 5
+  - 10
+  - 20
+  primary_metric: ndcg@10
+  candidate_strategy: sampled
+  sampled_negatives: 100
+models:
+  random: {}
+  popularity: {}
+  itemknn:
+    k: 100
+    similarity: cosine
+  als:
+    factors: 64
+    regularization: 0.05
+    iterations: 20
+    alpha: 40.0
+  bpr:
+    factors: 64
+    lr: 0.001
+    reg: 1.0e-05
+    epochs: 30
+    batch_size: 4096
+    device: auto
+  lgbm:
+    n_neg_per_pos: 4
+    num_leaves: 63
+    learning_rate: 0.05
+    n_estimators: 200
+    min_child_samples: 40
+    reg_lambda: 0.0
+  sasrec:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-06
+    epochs: 200
+    batch_size: 256
+    device: auto
+tuning:
+  enabled: false
+  trials_per_model: 8
+  timeout_seconds_per_model: 600
+  models_to_tune:
+  - itemknn
+  - als
+  - bpr
+  pruner: median
+  sampler: tpe
+selection:
+  objective: ndcg@10
+  direction: maximize
+  baselines:
+  - random
+  - popularity
+benchmark:
+  enabled: true
+  n_users_to_score: 200
+  candidates_per_user: 1000
+feature_importance:
+  enabled: true
+  shap_sample_size: 500
+  top_n: 20
+registry:
+  tracking_uri: sqlite:///mlruns.db
+  experiment_name: movielense-1m-ncf
+  registered_model_name: movielense-1m-ncf-best
+dashboards:
+  mlflow:
+    enabled: true
+    ui_port: 5000
+  wandb:
+    enabled: false
+    project: movielense-1m-ncf
+    entity: null
+    mode: online
+report:
+  output_dir: artifacts/reports
+  html_filename: dashboard.html
+  markdown_filename: research_report.md
+</pre>
+</details>
+<div class="meta">
+  Seed: <code>42</code><br>
+  Code commit: <code>9a66af5</code><br>
+  MLflow tracking URI: <code>sqlite:///mlruns.db</code><br>
+  Registered model: <code>movielense-1m-ncf-best</code> (v2)
+</div>
+</div>
+
+<script>
+  // Rating histogram
+  Plotly.newPlot("rating-hist", [{
+    x: ["1", "2", "3", "4", "5"],
+    y: [56174, 107557, 261197, 348971, 226310],
+    type: "bar",
+    marker: {color: "#0b7285"},
+  }], {title: "Rating distribution", margin: {t: 30}});
+
+  // User degree distribution
+  Plotly.newPlot("user-deg", [{
+    x: [20, 44, 96, 208, 2314],
+    type: "histogram",
+    marker: {color: "#5c940d"},
+  }], {title: "User interactions distribution", margin: {t: 30}});
+
+  // Metric bars
+  Plotly.newPlot("metric-bars", [{"name": "hr@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.04736667770785028, 0.3388539251407751, 0.44153693275919176, 0.5329579330904273, 0.47913216296787015, 0.43954951970851275, 0.6720768466379596]}, {"name": "hr@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.0967207684663796, 0.4983438224577675, 0.6222259026167605, 0.6906260351109639, 0.6616429281218946, 0.6200728718118582, 0.7976151043391851]}, {"name": "hr@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.19128850612785692, 0.676217290493541, 0.7833719774759854, 0.8246107982775753, 0.8390195428949984, 0.785028155018218, 0.8941702550513415]}, {"name": "precision@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.0094733355415701, 0.06777078502815259, 0.08830738655183575, 0.106591586618087, 0.09582643259357312, 0.08790990394169985, 0.1344153693275998]}, {"name": "precision@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.009672076846638053, 0.049834382245776736, 0.06222259026167885, 0.06906260351110075, 0.06616429281219317, 0.06200728718118858, 0.0797615104339253]}, {"name": "precision@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.009564425306392656, 0.03381086452467906, 0.03916859887380251, 0.04123053991388247, 0.041950977144753786, 0.03925140775091415, 0.044708512752571566]}, {"name": "recall@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.04736667770785028, 0.3388539251407751, 0.44153693275919176, 0.5329579330904273, 0.47913216296787015, 0.43954951970851275, 0.6720768466379596]}, {"name": "recall@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.0967207684663796, 0.4983438224577675, 0.6222259026167605, 0.6906260351109639, 0.6616429281218946, 0.6200728718118582, 0.7976151043391851]}, {"name": "recall@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.19128850612785692, 0.676217290493541, 0.7833719774759854, 0.8246107982775753, 0.8390195428949984, 0.785028155018218, 0.8941702550513415]}, {"name": "map@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.021646240476979144, 0.18457822678591299, 0.2500910897648228, 0.31780942917080635, 0.27522082367229717, 0.2596168709285638, 0.46330738655183884]}, {"name": "map@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.028099286529230168, 0.20569455617070748, 0.2742110154208515, 0.33919528173420016, 0.2998220923568704, 0.2837363365352749, 0.48008801400653056]}, {"name": "map@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.034457584531516414, 0.21793063283397401, 0.2854882515508756, 0.34863424304254487, 0.312131062889882, 0.2953287859893904, 0.4868988637002322]}, {"name": "mrr@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.021646240476979144, 0.18457822678591299, 0.2500910897648228, 0.31780942917080635, 0.27522082367229717, 0.2596168709285638, 0.46330738655183884]}, {"name": "mrr@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.028099286529230168, 0.20569455617070748, 0.2742110154208515, 0.33919528173420016, 0.2998220923568704, 0.2837363365352749, 0.48008801400653056]}, {"name": "mrr@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.034457584531516414, 0.21793063283397401, 0.2854882515508756, 0.34863424304254487, 0.312131062889882, 0.2953287859893904, 0.4868988637002322]}, {"name": "ndcg@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.02796201772314851, 0.22268898822448963, 0.29735953406355453, 0.3711042411555149, 0.3256481166907168, 0.3040875840680072, 0.51536269859063]}, {"name": "ndcg@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.04378555064469604, 0.2740910212133717, 0.35580036111994107, 0.42243426086427777, 0.3849116089281489, 0.36249318555842847, 0.5559851712354034]}, {"name": "ndcg@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.06743769585297393, 0.31893345983843674, 0.3966557756395391, 0.45648460145456443, 0.42976202461394775, 0.40437993570999375, 0.580538209327727]}],
+    {title: "Test metrics by model", barmode: "group", margin: {t: 30}});
+
+  
+  Plotly.newPlot("bench-throughput", [
+    {x: ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"],
+     y: [90622.5, 1182557.3, 16139.4, 56720.8, 55898.5, 119.1, 41118.1],
+     type: "bar", name: "users/sec", marker: {color: "#5c940d"}},
+  ], {title: "Scoring throughput (users/sec, batch)", margin: {t: 30}});
+  
+
+  
+  Plotly.newPlot("feature-importance", [{"marker": {"color": "#0b7285"}, "orientation": "h", "type": "bar", "x": [1738.8017570972443, 1798.7706090211868, 1944.6317108869553, 2112.124836564064, 2330.4847135543823, 2384.8703422546387, 2914.2857192754745, 2965.120750308037, 2988.1843465566635, 3339.3242329359055, 3391.3926808834076, 3650.240387439728, 3930.6223036050797, 3936.8009063005447, 5328.086041212082, 5497.1756274700165, 8401.829577088356, 13812.881048560143, 52365.12582743168, 653384.5823616982], "y": ["item_film-noir", "user_pref_western", "user_pref_musical", "user_pref_crime", "user_pref_horror", "user_pref_thriller", "user_pref_drama", "user_pref_romance", "user_pref_sci-fi", "user_pref_war", "item_comedy", "item_action", "item_drama", "user_pref_action", "user_pref_film-noir", "item_mean_rating", "item_release_year_centered", "user_interaction_count_log", "user_item_genre_affinity", "item_popularity_log"]}],
+    {title: "Feature importance (gain) — top features", margin: {t: 30, l: 200}});
+  
+
+  
+</script>
+</body>
+</html>

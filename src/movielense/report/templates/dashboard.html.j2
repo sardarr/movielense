@@ -46,7 +46,32 @@
 </div>
 
 <div class="section">
-<h2>Splits</h2>
+<h2>Data setup &amp; evaluation protocol</h2>
+<p class="meta">The two knobs that most affect the leaderboard: how train/val/test is carved out, and how each model is scored at evaluation time.</p>
+<div class="grid">
+  <div class="stat"><div class="label">Dataset</div><div class="value" style="font-size:16px">{{ data_setup.dataset_name }}</div></div>
+  <div class="stat"><div class="label">Min interactions (user / item)</div><div class="value" style="font-size:16px">{{ data_setup.min_user_interactions }} / {{ data_setup.min_item_interactions }}</div></div>
+  <div class="stat"><div class="label">Rating &ge; threshold = positive</div><div class="value" style="font-size:16px">{{ data_setup.rating_threshold }}</div></div>
+  <div class="stat"><div class="label">Split strategy</div><div class="value" style="font-size:16px">{{ data_setup.split_strategy }}</div></div>
+  <div class="stat"><div class="label">Candidate strategy</div><div class="value" style="font-size:16px">{{ data_setup.candidate_strategy }}{% if data_setup.sampled_negatives %} ({{ data_setup.sampled_negatives }} negs){% endif %}</div></div>
+  <div class="stat"><div class="label">Eval cutoffs (K)</div><div class="value" style="font-size:16px">{{ data_setup.ks }}</div></div>
+</div>
+<details style="margin-top:12px"><summary>What these mean</summary>
+<ul>
+  <li><strong>Split strategy</strong> —
+    {% if data_setup.split_strategy == "temporal_per_user" %}
+    per user, sort interactions by time, take the first {{ "%.0f"|format((data_setup.train_ratio or 0)*100) }}% as train, next {{ "%.0f"|format((data_setup.val_ratio or 0)*100) }}% as val, last {{ "%.0f"|format((data_setup.test_ratio or 0)*100) }}% as test (this run).
+    {% elif data_setup.split_strategy == "leave_one_out" %}
+    per user, the single most-recent positive is test, second-most-recent is val, everything else is train (this run — published NCF / SASRec protocol).
+    {% else %}
+    {{ data_setup.split_strategy }}
+    {% endif %}
+  </li>
+  <li><strong>Candidate strategy</strong> — <code>full_catalog</code>: rank every unseen item; metrics are pessimistic and reward popularity-aware models. <code>sampled</code>: rank the held-out positive against N random negatives; metrics are permissive and reward expressive models.</li>
+  <li><strong>Rating threshold</strong> — only ratings &ge; this count as positive interactions for ranking metrics; lower-rated rows still go into training as implicit signal.</li>
+</ul>
+</details>
+<h3 style="margin-top:18px">Resulting splits</h3>
 <table>
   <thead><tr><th>Split</th><th>Interactions</th><th>Users</th></tr></thead>
   <tbody>
@@ -80,15 +105,17 @@
 
 {% if arch_cards %}
 <div class="section">
-<h2>Models — what each one does</h2>
+<h2>Models — architecture &amp; training recipe</h2>
+<p class="meta">For each model in the comparison: family, what it consumes at fit time, the training procedure, scoring cost, where it shines, and how readable its decisions are.</p>
 <table>
-  <thead><tr><th>Model</th><th>Type</th><th>Inputs</th><th>Inference</th><th>Use case</th><th>Interpretability</th></tr></thead>
+  <thead><tr><th>Model</th><th>Type</th><th>Inputs</th><th>Training</th><th>Inference</th><th>Use case</th><th>Interpretability</th></tr></thead>
   <tbody>
   {% for c in arch_cards %}
     <tr>
       <td><strong>{{ c.name }}</strong></td>
       <td>{{ c.type }}</td>
       <td>{{ c.input }}</td>
+      <td>{{ c.training }}</td>
       <td>{{ c.inference }}</td>
       <td>{{ c.use_case }}</td>
       <td>{{ c.interpretability }}</td>
