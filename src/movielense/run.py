@@ -62,8 +62,10 @@ def apply_smoke_overrides(cfg_raw: dict) -> dict:
     cfg_raw["models"]["als"]["iterations"] = 5
     cfg_raw["models"]["lgbm"]["n_estimators"] = 60
     cfg_raw["models"]["lgbm"]["num_leaves"] = 31
-    cfg_raw["models"]["sasrec"]["epochs"] = 5
-    cfg_raw["models"]["sasrec"]["batch_size"] = 64
+    for sm in ("sasrec", "sasrec_content", "sasrec_content_only"):
+        if sm in cfg_raw["models"]:
+            cfg_raw["models"][sm]["epochs"] = 5
+            cfg_raw["models"][sm]["batch_size"] = 64
     # In smoke mode, skip slow tuning of lgbm and sasrec — defaults are good enough.
     cfg_raw["tuning"]["models_to_tune"] = [
         m for m in cfg_raw["tuning"]["models_to_tune"] if m not in ("lgbm", "sasrec")
@@ -124,6 +126,23 @@ def main(argv: list[str] | None = None) -> int:
     # Feature store needed by LightGBM (and ignored by other models).
     feature_store = build_feature_store(ds, train_positives=train_pos)
 
+    # Content embeddings needed by SASRec content-aware variants. Computed once
+    # (cached on disk) and shared across variants.
+    content_embeddings = None
+    content_models = [m for m in cfg.models_enabled if m.startswith("sasrec_content")]
+    if content_models:
+        from .data.content import build_content_embeddings
+        encoder = (
+            cfg["models"][content_models[0]].get("content", {}).get("encoder", "minilm")
+        )
+        content_embeddings = build_content_embeddings(
+            ds.items,
+            num_items=ds.num_items,
+            encoder=encoder,
+            cache_dir=Path(cfg["dataset"]["processed_dir"]),
+        )
+        log.info("content embeddings ready: %s shape=%s", encoder, content_embeddings.shape)
+
     tuning_results: dict[str, dict] = {}
     if cfg["tuning"]["enabled"] and not args.skip_tuning:
         for model_name in cfg["tuning"]["models_to_tune"]:
@@ -146,6 +165,7 @@ def main(argv: list[str] | None = None) -> int:
                 sampler=cfg["tuning"]["sampler"],
                 pruner=cfg["tuning"]["pruner"],
                 feature_store=feature_store,
+                content_embeddings=content_embeddings,
             )
             write_tuning_summary(tr, paths.tuning_dir)
             tuning_results[model_name] = {
@@ -177,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
                     num_items=ds.num_items,
                     seed=cfg.seed,
                     feature_store=feature_store,
+                    content_embeddings=content_embeddings,
                 )
                 fit_t0 = time.perf_counter()
                 model.fit(train_pos, observer=observer)

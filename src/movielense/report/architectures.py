@@ -92,4 +92,47 @@ ARCHITECTURE: dict[str, dict[str, str]] = {
         ),
         "interpretability": "low — attention weights can be probed but require additional tooling",
     },
+    "sasrec_content": {
+        "type": "Content-collaborative sequential transformer (SASRec + frozen MiniLM)",
+        "input": (
+            "same time-ordered sequences as SASRec, plus a frozen sentence-transformer "
+            "(all-MiniLM-L6-v2) embedding of '{title}. Genres: ... . Year: ...' for each item"
+        ),
+        "training": (
+            "item representation = learned id-embedding + linear projection of frozen text "
+            "embedding; transformer + BPR loss are unchanged. Only the projection head and "
+            "id-embedding move during training; the 384-d text vectors are read-only"
+        ),
+        "inference": (
+            "score(u, i) = <h_u, id_emb[i] + content_proj(text_emb[i])>; same dot-product cost "
+            "as plain SASRec after the fused item matrix is cached"
+        ),
+        "use_case": (
+            "tests whether semantic content (title + genres) can lift cold or long-tail items "
+            "where pure id-embeddings have little signal; expected to help most for items with "
+            "few training interactions"
+        ),
+        "interpretability": "low — semantic neighborhoods inspectable via text-embedding cosine, but model decisions still latent",
+    },
+    "sasrec_content_only": {
+        "type": "Content-only sequential transformer (SASRec without id-embeddings)",
+        "input": (
+            "same time-ordered sequences as SASRec, but the item representation is built "
+            "exclusively from frozen sentence-transformer embeddings — there are no learned "
+            "per-item id vectors at all"
+        ),
+        "training": (
+            "item representation = linear projection of frozen text embedding (no id-embedding term); "
+            "transformer + BPR loss are unchanged. Only the projection head and transformer trunk train"
+        ),
+        "inference": (
+            "score(u, i) = <h_u, content_proj(text_emb[i])>; works for items the model has never "
+            "seen during training, since their representation comes purely from text"
+        ),
+        "use_case": (
+            "cold-start probe: how much of SASRec's signal comes from collaborative id-embeddings "
+            "vs the semantic content alone? A floor for content-driven recommendation"
+        ),
+        "interpretability": "low — item representations are projected text; user state still latent",
+    },
 }

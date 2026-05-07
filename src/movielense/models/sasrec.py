@@ -66,11 +66,20 @@ class _SASRecModule(nn.Module):
         num_blocks: int = 2,
         max_len: int = 50,
         dropout: float = 0.2,
+        content_embeddings: torch.Tensor | None = None,
+        content_mode: str = "off",
     ):
         super().__init__()
+        if content_mode not in ("off", "fuse", "only"):
+            raise ValueError(f"content_mode must be off|fuse|only, got {content_mode}")
+        if content_mode != "off" and content_embeddings is None:
+            raise ValueError(f"content_mode={content_mode} requires content_embeddings")
+
         self.num_items = num_items
         self.d_model = d_model
         self.max_len = max_len
+        self.content_mode = content_mode
+
         self.item_emb = nn.Embedding(num_items + 1, d_model, padding_idx=0)
         self.pos_emb = nn.Embedding(max_len, d_model)
         self.dropout = nn.Dropout(dropout)
@@ -83,10 +92,37 @@ class _SASRecModule(nn.Module):
         with torch.no_grad():
             self.item_emb.weight[0].zero_()
 
+        if content_mode != "off":
+            content_dim = content_embeddings.shape[1]
+            padded = torch.zeros(num_items + 1, content_dim, dtype=torch.float32)
+            padded[1:] = content_embeddings
+            # Frozen content matrix: not trained, kept on the same device as the module.
+            self.register_buffer("content_buf", padded)
+            self.content_proj = nn.Linear(content_dim, d_model)
+            nn.init.xavier_normal_(self.content_proj.weight)
+            nn.init.zeros_(self.content_proj.bias)
+        else:
+            self.content_proj = None
+
+    def _item_repr(self, ids: torch.Tensor) -> torch.Tensor:
+        if self.content_mode == "off":
+            return self.item_emb(ids)
+        proj = self.content_proj(self.content_buf[ids])
+        # Pad token (id 0) must stay zero so attention masking works correctly.
+        proj = proj.masked_fill((ids == 0).unsqueeze(-1), 0.0)
+        if self.content_mode == "only":
+            return proj
+        return self.item_emb(ids) + proj
+
+    def all_item_repr(self) -> torch.Tensor:
+        """Full (num_items + 1, d_model) item-representation matrix used at scoring."""
+        ids = torch.arange(self.num_items + 1, device=self.item_emb.weight.device)
+        return self._item_repr(ids)
+
     def forward(self, seq: torch.Tensor) -> torch.Tensor:
         B, L = seq.shape
         positions = torch.arange(L, device=seq.device).unsqueeze(0).expand(B, L)
-        x = self.item_emb(seq) + self.pos_emb(positions)
+        x = self._item_repr(seq) + self.pos_emb(positions)
         x = self.dropout(x)
         pad_mask = seq == 0
         causal = torch.triu(
@@ -116,6 +152,9 @@ class SASRecRecommender(Recommender):
         batch_size: int = 128,
         device: str = "auto",
         seed: int = 0,
+        content_embeddings: np.ndarray | None = None,
+        content_mode: str = "off",
+        content_encoder: str | None = None,
     ):
         super().__init__(num_users=num_users, num_items=num_items)
         self.d_model = d_model
@@ -129,6 +168,12 @@ class SASRecRecommender(Recommender):
         self.batch_size = batch_size
         self.seed = seed
         self.device = _resolve_device(device)
+        self.content_mode = content_mode
+        self.content_encoder = content_encoder
+        self._content_t = (
+            torch.as_tensor(content_embeddings, dtype=torch.float32)
+            if content_embeddings is not None else None
+        )
         self.module: _SASRecModule | None = None
         self._item_emb_np: np.ndarray | None = None
         self._user_h_np: np.ndarray | None = None
@@ -196,6 +241,8 @@ class SASRecRecommender(Recommender):
             num_blocks=self.num_blocks,
             max_len=self.max_len,
             dropout=self.dropout,
+            content_embeddings=self._content_t,
+            content_mode=self.content_mode,
         ).to(self.device)
         opt = torch.optim.Adam(self.module.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
@@ -214,8 +261,8 @@ class SASRecRecommender(Recommender):
                 neg = torch.as_tensor(neg, dtype=torch.long, device=self.device)
 
                 h = self.module(inp)  # (B, L, d)
-                pos_emb = self.module.item_emb(tgt)  # (B, L, d)
-                neg_emb = self.module.item_emb(neg)
+                pos_emb = self.module._item_repr(tgt)  # (B, L, d)
+                neg_emb = self.module._item_repr(neg)
                 pos_score = (h * pos_emb).sum(-1)
                 neg_score = (h * neg_emb).sum(-1)
                 # mask: only positions where target is non-pad
@@ -263,7 +310,8 @@ class SASRecRecommender(Recommender):
             user_order.append(int(u))
         if not all_inputs:
             self._user_h_np = H
-            self._item_emb_np = self.module.item_emb.weight.detach().cpu().numpy()
+            with torch.no_grad():
+                self._item_emb_np = self.module.all_item_repr().detach().cpu().numpy()
             return
 
         x = torch.as_tensor(np.array(all_inputs), dtype=torch.long, device=self.device)
@@ -280,9 +328,10 @@ class SASRecRecommender(Recommender):
                     H[u] = h_last[k].cpu().numpy()
 
         self._user_h_np = np.nan_to_num(H, nan=0.0, posinf=0.0, neginf=0.0)
+        with torch.no_grad():
+            full_item_repr = self.module.all_item_repr().detach().cpu().numpy()
         self._item_emb_np = np.nan_to_num(
-            self.module.item_emb.weight.detach().cpu().numpy(),
-            nan=0.0, posinf=0.0, neginf=0.0,
+            full_item_repr, nan=0.0, posinf=0.0, neginf=0.0,
         )
 
     # ---- inference ----
@@ -305,4 +354,6 @@ class SASRecRecommender(Recommender):
             "epochs": self.epochs,
             "batch_size": self.batch_size,
             "device": str(self.device),
+            "content_mode": self.content_mode,
+            "content_encoder": self.content_encoder,
         }

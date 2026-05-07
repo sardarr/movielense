@@ -15,6 +15,7 @@ def build(
     num_items: int,
     seed: int,
     feature_store=None,
+    content_embeddings=None,
 ) -> Recommender:
     name = name.lower()
     if name == "random":
@@ -37,11 +38,19 @@ def build(
             seed=seed,
             **params,
         )
-    if name == "sasrec":
+    if name in ("sasrec", "sasrec_content", "sasrec_content_only"):
+        ce_cfg = dict(params.pop("content", {}) or {})
+        mode = ce_cfg.get("mode", "off")
+        encoder = ce_cfg.get("encoder")
+        if mode != "off" and content_embeddings is None:
+            raise ValueError(f"{name} requires content_embeddings (mode={mode})")
         return SASRecRecommender(
             num_users=num_users,
             num_items=num_items,
             seed=seed,
+            content_embeddings=content_embeddings if mode != "off" else None,
+            content_mode=mode,
+            content_encoder=encoder,
             **params,
         )
     raise ValueError(f"unknown model: {name}")

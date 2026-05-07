@@ -28,12 +28,9 @@
 <body>
 <h1>MovieLense — Recommendation Research Report</h1>
 <div class="meta">
-  Run <code>ncf-protocol</code> &middot; generated 2026-05-07 15:38:20Z &middot;
+  Run <code>ncf-protocol</code> &middot; generated 2026-05-07 16:39:30Z &middot;
   primary metric <span class="pill">ndcg@10</span>
-  selection: <span class="winner">sasrec</span>
-</div>
-<div style="background:#fff3bf;border-left:4px solid #f59f00;padding:10px 14px;margin:14px 0;border-radius:4px;font-size:13px">
-  <strong>Note about SASRec numbers:</strong> this run used a pre-fix version of <code>SASRecRecommender.embed_users</code> that incorrectly indexed into the padding region for short user histories (left-padded sequences). The fix (<code>h[:, -1, :]</code>) is in <code>main</code> but has not been re-run yet — SASRec metrics here are likely a slight underestimate.
+  selection: <span class="winner">sasrec_content</span>
 </div>
 
 <div class="section">
@@ -122,9 +119,19 @@
       <td>0.4395</td><td>0.6201</td><td>0.7850</td><td>0.0879</td><td>0.0620</td><td>0.0393</td><td>0.4395</td><td>0.6201</td><td>0.7850</td><td>0.2596</td><td>0.2837</td><td>0.2953</td><td>0.2596</td><td>0.2837</td><td>0.2953</td><td>0.3041</td><td>0.3625</td><td>0.4044</td>
     </tr>
     
+    <tr class="">
+      <td>sasrec</td>
+      <td>0.6694</td><td>0.7971</td><td>0.8925</td><td>0.1339</td><td>0.0797</td><td>0.0446</td><td>0.6694</td><td>0.7971</td><td>0.8925</td><td>0.4619</td><td>0.4791</td><td>0.4860</td><td>0.4619</td><td>0.4791</td><td>0.4860</td><td>0.5136</td><td>0.5551</td><td>0.5795</td>
+    </tr>
+    
     <tr class="winner-row">
-      <td>sasrec (winner)</td>
-      <td>0.6721</td><td>0.7976</td><td>0.8942</td><td>0.1344</td><td>0.0798</td><td>0.0447</td><td>0.6721</td><td>0.7976</td><td>0.8942</td><td>0.4633</td><td>0.4801</td><td>0.4869</td><td>0.4633</td><td>0.4801</td><td>0.4869</td><td>0.5154</td><td>0.5560</td><td>0.5805</td>
+      <td>sasrec_content (winner)</td>
+      <td>0.6742</td><td>0.8014</td><td>0.9016</td><td>0.1348</td><td>0.0801</td><td>0.0451</td><td>0.6742</td><td>0.8014</td><td>0.9016</td><td>0.4648</td><td>0.4821</td><td>0.4891</td><td>0.4648</td><td>0.4821</td><td>0.4891</td><td>0.5170</td><td>0.5584</td><td>0.5839</td>
+    </tr>
+    
+    <tr class="">
+      <td>sasrec_content_only</td>
+      <td>0.4818</td><td>0.6217</td><td>0.7580</td><td>0.0964</td><td>0.0622</td><td>0.0379</td><td>0.4818</td><td>0.6217</td><td>0.7580</td><td>0.2935</td><td>0.3123</td><td>0.3218</td><td>0.2935</td><td>0.3123</td><td>0.3218</td><td>0.3402</td><td>0.3855</td><td>0.4201</td>
     </tr>
     
   </tbody>
@@ -210,6 +217,26 @@
       <td>low — attention weights can be probed but require additional tooling</td>
     </tr>
   
+    <tr>
+      <td><strong>sasrec_content</strong></td>
+      <td>Content-collaborative sequential transformer (SASRec + frozen MiniLM)</td>
+      <td>same time-ordered sequences as SASRec, plus a frozen sentence-transformer (all-MiniLM-L6-v2) embedding of '{title}. Genres: ... . Year: ...' for each item</td>
+      <td>item representation = learned id-embedding + linear projection of frozen text embedding; transformer + BPR loss are unchanged. Only the projection head and id-embedding move during training; the 384-d text vectors are read-only</td>
+      <td>score(u, i) = <h_u, id_emb[i] + content_proj(text_emb[i])>; same dot-product cost as plain SASRec after the fused item matrix is cached</td>
+      <td>tests whether semantic content (title + genres) can lift cold or long-tail items where pure id-embeddings have little signal; expected to help most for items with few training interactions</td>
+      <td>low — semantic neighborhoods inspectable via text-embedding cosine, but model decisions still latent</td>
+    </tr>
+  
+    <tr>
+      <td><strong>sasrec_content_only</strong></td>
+      <td>Content-only sequential transformer (SASRec without id-embeddings)</td>
+      <td>same time-ordered sequences as SASRec, but the item representation is built exclusively from frozen sentence-transformer embeddings — there are no learned per-item id vectors at all</td>
+      <td>item representation = linear projection of frozen text embedding (no id-embedding term); transformer + BPR loss are unchanged. Only the projection head and transformer trunk train</td>
+      <td>score(u, i) = <h_u, content_proj(text_emb[i])>; works for items the model has never seen during training, since their representation comes purely from text</td>
+      <td>cold-start probe: how much of SASRec's signal comes from collaborative id-embeddings vs the semantic content alone? A floor for content-driven recommendation</td>
+      <td>low — item representations are projected text; user state still latent</td>
+    </tr>
+  
   </tbody>
 </table>
 </div>
@@ -229,8 +256,8 @@
       <td><strong>random</strong></td>
       <td>0.00</td>
       <td>0.01</td>
-      <td>0.03</td>
-      <td>90622</td>
+      <td>0.01</td>
+      <td>122790</td>
       <td>0.00</td>
     </tr>
   
@@ -239,53 +266,71 @@
       <td>0.01</td>
       <td>0.00</td>
       <td>0.00</td>
-      <td>1182557</td>
+      <td>1198804</td>
       <td>0.03</td>
     </tr>
   
     <tr>
       <td><strong>itemknn</strong></td>
-      <td>0.89</td>
-      <td>0.06</td>
+      <td>0.88</td>
+      <td>0.05</td>
       <td>0.10</td>
-      <td>16139</td>
+      <td>17039</td>
       <td>7.01</td>
     </tr>
   
     <tr>
       <td><strong>als</strong></td>
-      <td>8.94</td>
+      <td>9.01</td>
       <td>0.02</td>
       <td>0.02</td>
-      <td>56721</td>
+      <td>60263</td>
       <td>2.38</td>
     </tr>
   
     <tr>
       <td><strong>bpr</strong></td>
-      <td>32.06</td>
+      <td>23.07</td>
       <td>0.02</td>
-      <td>0.03</td>
-      <td>55898</td>
+      <td>0.02</td>
+      <td>56307</td>
       <td>4.76</td>
     </tr>
   
     <tr>
       <td><strong>lgbm</strong></td>
-      <td>124.41</td>
-      <td>7.76</td>
-      <td>12.03</td>
+      <td>120.94</td>
+      <td>7.34</td>
+      <td>14.15</td>
       <td>119</td>
       <td>3.40</td>
     </tr>
   
     <tr>
       <td><strong>sasrec</strong></td>
-      <td>653.95</td>
+      <td>586.68</td>
       <td>0.02</td>
-      <td>0.05</td>
-      <td>41118</td>
+      <td>0.02</td>
+      <td>57363</td>
       <td>5.15</td>
+    </tr>
+  
+    <tr>
+      <td><strong>sasrec_content</strong></td>
+      <td>707.94</td>
+      <td>0.02</td>
+      <td>0.02</td>
+      <td>56693</td>
+      <td>16.11</td>
+    </tr>
+  
+    <tr>
+      <td><strong>sasrec_content_only</strong></td>
+      <td>680.85</td>
+      <td>0.02</td>
+      <td>0.02</td>
+      <td>54994</td>
+      <td>16.11</td>
     </tr>
   
   </tbody>
@@ -367,6 +412,34 @@ models:
     epochs: 200
     batch_size: 256
     device: auto
+  sasrec_content:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-06
+    epochs: 200
+    batch_size: 256
+    device: auto
+    content:
+      mode: fuse
+      encoder: minilm
+  sasrec_content_only:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-06
+    epochs: 200
+    batch_size: 256
+    device: auto
+    content:
+      mode: only
+      encoder: minilm
 tuning:
   enabled: false
   trials_per_model: 8
@@ -412,9 +485,9 @@ report:
 </details>
 <div class="meta">
   Seed: <code>42</code><br>
-  Code commit: <code>9a66af5</code><br>
+  Code commit: <code>42b90fd</code><br>
   MLflow tracking URI: <code>sqlite:///mlruns.db</code><br>
-  Registered model: <code>movielense-1m-ncf-best</code> (v2)
+  Registered model: <code>movielense-1m-ncf-best</code> (v3)
 </div>
 </div>
 
@@ -435,13 +508,13 @@ report:
   }], {title: "User interactions distribution", margin: {t: 30}});
 
   // Metric bars
-  Plotly.newPlot("metric-bars", [{"name": "hr@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.04736667770785028, 0.3388539251407751, 0.44153693275919176, 0.5329579330904273, 0.47913216296787015, 0.43954951970851275, 0.6720768466379596]}, {"name": "hr@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.0967207684663796, 0.4983438224577675, 0.6222259026167605, 0.6906260351109639, 0.6616429281218946, 0.6200728718118582, 0.7976151043391851]}, {"name": "hr@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.19128850612785692, 0.676217290493541, 0.7833719774759854, 0.8246107982775753, 0.8390195428949984, 0.785028155018218, 0.8941702550513415]}, {"name": "precision@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.0094733355415701, 0.06777078502815259, 0.08830738655183575, 0.106591586618087, 0.09582643259357312, 0.08790990394169985, 0.1344153693275998]}, {"name": "precision@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.009672076846638053, 0.049834382245776736, 0.06222259026167885, 0.06906260351110075, 0.06616429281219317, 0.06200728718118858, 0.0797615104339253]}, {"name": "precision@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.009564425306392656, 0.03381086452467906, 0.03916859887380251, 0.04123053991388247, 0.041950977144753786, 0.03925140775091415, 0.044708512752571566]}, {"name": "recall@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.04736667770785028, 0.3388539251407751, 0.44153693275919176, 0.5329579330904273, 0.47913216296787015, 0.43954951970851275, 0.6720768466379596]}, {"name": "recall@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.0967207684663796, 0.4983438224577675, 0.6222259026167605, 0.6906260351109639, 0.6616429281218946, 0.6200728718118582, 0.7976151043391851]}, {"name": "recall@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.19128850612785692, 0.676217290493541, 0.7833719774759854, 0.8246107982775753, 0.8390195428949984, 0.785028155018218, 0.8941702550513415]}, {"name": "map@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.021646240476979144, 0.18457822678591299, 0.2500910897648228, 0.31780942917080635, 0.27522082367229717, 0.2596168709285638, 0.46330738655183884]}, {"name": "map@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.028099286529230168, 0.20569455617070748, 0.2742110154208515, 0.33919528173420016, 0.2998220923568704, 0.2837363365352749, 0.48008801400653056]}, {"name": "map@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.034457584531516414, 0.21793063283397401, 0.2854882515508756, 0.34863424304254487, 0.312131062889882, 0.2953287859893904, 0.4868988637002322]}, {"name": "mrr@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.021646240476979144, 0.18457822678591299, 0.2500910897648228, 0.31780942917080635, 0.27522082367229717, 0.2596168709285638, 0.46330738655183884]}, {"name": "mrr@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.028099286529230168, 0.20569455617070748, 0.2742110154208515, 0.33919528173420016, 0.2998220923568704, 0.2837363365352749, 0.48008801400653056]}, {"name": "mrr@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.034457584531516414, 0.21793063283397401, 0.2854882515508756, 0.34863424304254487, 0.312131062889882, 0.2953287859893904, 0.4868988637002322]}, {"name": "ndcg@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.02796201772314851, 0.22268898822448963, 0.29735953406355453, 0.3711042411555149, 0.3256481166907168, 0.3040875840680072, 0.51536269859063]}, {"name": "ndcg@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.04378555064469604, 0.2740910212133717, 0.35580036111994107, 0.42243426086427777, 0.3849116089281489, 0.36249318555842847, 0.5559851712354034]}, {"name": "ndcg@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"], "y": [0.06743769585297393, 0.31893345983843674, 0.3966557756395391, 0.45648460145456443, 0.42976202461394775, 0.40437993570999375, 0.580538209327727]}],
+  Plotly.newPlot("metric-bars", [{"name": "hr@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.04736667770785028, 0.3388539251407751, 0.44153693275919176, 0.5329579330904273, 0.47913216296787015, 0.43954951970851275, 0.6694269625703876, 0.6742298774428619, 0.4817820470354422]}, {"name": "hr@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.0967207684663796, 0.4983438224577675, 0.6222259026167605, 0.6906260351109639, 0.6616429281218946, 0.6200728718118582, 0.7971182510765153, 0.80142431268632, 0.6217290493540908]}, {"name": "hr@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.19128850612785692, 0.676217290493541, 0.7833719774759854, 0.8246107982775753, 0.8390195428949984, 0.785028155018218, 0.8925140775091089, 0.9016230539913879, 0.7580324610798278]}, {"name": "precision@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.0094733355415701, 0.06777078502815259, 0.08830738655183575, 0.106591586618087, 0.09582643259357312, 0.08790990394169985, 0.13388539251408527, 0.13484597548858035, 0.09635640940708766]}, {"name": "precision@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.009672076846638053, 0.049834382245776736, 0.06222259026167885, 0.06906260351110075, 0.06616429281219317, 0.06200728718118858, 0.07971182510765833, 0.08014243126863888, 0.06217290493541187]}, {"name": "precision@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.009564425306392656, 0.03381086452467906, 0.03916859887380251, 0.04123053991388247, 0.041950977144753786, 0.03925140775091415, 0.044625703875459916, 0.04508115269957397, 0.03790162305399433]}, {"name": "recall@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.04736667770785028, 0.3388539251407751, 0.44153693275919176, 0.5329579330904273, 0.47913216296787015, 0.43954951970851275, 0.6694269625703876, 0.6742298774428619, 0.4817820470354422]}, {"name": "recall@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.0967207684663796, 0.4983438224577675, 0.6222259026167605, 0.6906260351109639, 0.6616429281218946, 0.6200728718118582, 0.7971182510765153, 0.80142431268632, 0.6217290493540908]}, {"name": "recall@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.19128850612785692, 0.676217290493541, 0.7833719774759854, 0.8246107982775753, 0.8390195428949984, 0.785028155018218, 0.8925140775091089, 0.9016230539913879, 0.7580324610798278]}, {"name": "map@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.021646240476979144, 0.18457822678591299, 0.2500910897648228, 0.31780942917080635, 0.27522082367229717, 0.2596168709285638, 0.461852710610578, 0.46479242574804086, 0.293549188473004]}, {"name": "map@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.028099286529230168, 0.20569455617070748, 0.2742110154208515, 0.33919528173420016, 0.2998220923568704, 0.2837363365352749, 0.47910791179671675, 0.4820519645420284, 0.31227976781968025]}, {"name": "map@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.034457584531516414, 0.21793063283397401, 0.2854882515508756, 0.34863424304254487, 0.312131062889882, 0.2953287859893904, 0.4859679782983953, 0.48909442139271003, 0.3218142679988719]}, {"name": "mrr@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.021646240476979144, 0.18457822678591299, 0.2500910897648228, 0.31780942917080635, 0.27522082367229717, 0.2596168709285638, 0.461852710610578, 0.46479242574804086, 0.293549188473004]}, {"name": "mrr@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.028099286529230168, 0.20569455617070748, 0.2742110154208515, 0.33919528173420016, 0.2998220923568704, 0.2837363365352749, 0.47910791179671675, 0.4820519645420284, 0.31227976781968025]}, {"name": "mrr@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.034457584531516414, 0.21793063283397401, 0.2854882515508756, 0.34863424304254487, 0.312131062889882, 0.2953287859893904, 0.4859679782983953, 0.48909442139271003, 0.3218142679988719]}, {"name": "ndcg@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.02796201772314851, 0.22268898822448963, 0.29735953406355453, 0.3711042411555149, 0.3256481166907168, 0.3040875840680072, 0.5135890761374506, 0.5170231728299096, 0.34020775986499435]}, {"name": "ndcg@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.04378555064469604, 0.2740910212133717, 0.35580036111994107, 0.42243426086427777, 0.3849116089281489, 0.36249318555842847, 0.555096701085114, 0.5584345683598303, 0.3855217907593888]}, {"name": "ndcg@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.06743769585297393, 0.31893345983843674, 0.3966557756395391, 0.45648460145456443, 0.42976202461394775, 0.40437993570999375, 0.5795118692839933, 0.5838782157864119, 0.4200744677529062]}],
     {title: "Test metrics by model", barmode: "group", margin: {t: 30}});
 
   
   Plotly.newPlot("bench-throughput", [
-    {x: ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec"],
-     y: [90622.5, 1182557.3, 16139.4, 56720.8, 55898.5, 119.1, 41118.1],
+    {x: ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"],
+     y: [122790.5, 1198803.6, 17039.0, 60262.9, 56307.0, 118.6, 57363.4, 56693.4, 54993.5],
      type: "bar", name: "users/sec", marker: {color: "#5c940d"}},
   ], {title: "Scoring throughput (users/sec, batch)", margin: {t: 30}});
   
