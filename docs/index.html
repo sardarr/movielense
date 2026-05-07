@@ -27,17 +27,31 @@
 </head>
 <body>
 <h1>MovieLense — Recommendation Research Report</h1>
-<div style="background:#e7f5ff;border-left:4px solid #0b7285;padding:10px 14px;margin:14px 0;border-radius:4px;font-size:13px">
-  <strong>Statistical significance (paired test on n=6038 test users, same sampled negatives per user):</strong>
-  <ul style="margin:6px 0 0 18px">
-    <li><code>sasrec_content</code> vs <code>sasrec</code>: mean diff = <strong>+0.0033</strong> NDCG@10. Paired t p=0.20, Wilcoxon p=0.18, bootstrap 95% CI <strong>[−0.0016, +0.0086]</strong> &mdash; <strong>not significant</strong>. The MiniLM content lift is statistical noise; win/tie/loss is 22.7% / 55.1% / 22.2%.</li>
-    <li><code>sasrec_content_only</code> vs <code>sasrec</code>: mean diff = <strong>−0.1696</strong> NDCG@10. Paired t p≈10<sup>−281</sup>, bootstrap 95% CI [−0.178, −0.160] &mdash; <strong>highly significant</strong>. Content alone cannot replace collaborative id-embeddings on ML-1M.</li>
-  </ul>
+<div style="background:#e7f5ff;border-left:4px solid #0b7285;padding:12px 16px;margin:14px 0;border-radius:4px;font-size:13px">
+  <strong>Statistical significance — 4-way encoder comparison (paired test, n=6038 test users, same sampled negatives per user):</strong>
+  <table style="margin-top:8px;font-size:12px;background:transparent">
+    <thead><tr style="background:#cfe2ff"><th style="text-align:left">Variant</th><th>NDCG@10</th><th>Δ vs sasrec</th><th>95% CI</th><th>Paired-t p</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr style="background:#d3f9d8"><td><strong>sasrec_content_mpnet</strong> (768d)</td><td>0.5620</td><td>+0.0056</td><td>[+0.0004, +0.0108]</td><td><strong>0.032</strong></td><td>* significant lift</td></tr>
+      <tr><td>sasrec_content_bge (1024d)</td><td>0.5594</td><td>+0.0030</td><td>[−0.0021, +0.0081]</td><td>0.26</td><td>n.s.</td></tr>
+      <tr><td>sasrec_content_minilm (384d)</td><td>0.5585</td><td>+0.0020</td><td>[−0.0031, +0.0072]</td><td>0.45</td><td>n.s.</td></tr>
+      <tr><td><em>sasrec (id-only baseline)</em></td><td>0.5565</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr style="background:#ffe3e3"><td>sasrec_content_mxbai (1024d)</td><td>0.5422</td><td>−0.0142</td><td>[−0.0205, −0.0080]</td><td><strong>4×10⁻⁶</strong></td><td>*** significant <strong>harm</strong></td></tr>
+      <tr style="background:#ffe3e3"><td>sasrec_content_only (no id-emb)</td><td>0.3857</td><td>−0.1707</td><td>[−0.179, −0.162]</td><td>≈10⁻²⁸³</td><td>*** large drop</td></tr>
+    </tbody>
+  </table>
+  <p style="margin:10px 0 0 0">
+    <strong>Findings:</strong>
+    (1) Only <strong>MPNet (768d)</strong> achieves a statistically significant lift, and it's small (+1% NDCG@10).
+    (2) Encoder size doesn't predict performance — the smaller MPNet beats both 1024d SOTA encoders (BGE, Mxbai).
+    (3) <strong>Mxbai actively hurts</strong> with high confidence — likely because it expects <code>query</code>/<code>passage</code> instruction prompts that the pipeline doesn't apply.
+    (4) Without id-embeddings, content alone collapses to mid-tier (below ALS).
+  </p>
 </div>
 <div class="meta">
-  Run <code>ncf-protocol</code> &middot; generated 2026-05-07 16:39:30Z &middot;
+  Run <code>ncf-protocol</code> &middot; generated 2026-05-07 19:13:27Z &middot;
   primary metric <span class="pill">ndcg@10</span>
-  selection: <span class="winner">sasrec_content</span>
+  selection: <span class="winner">sasrec_content_mpnet</span>
 </div>
 
 <div class="section">
@@ -128,17 +142,32 @@
     
     <tr class="">
       <td>sasrec</td>
-      <td>0.6694</td><td>0.7971</td><td>0.8925</td><td>0.1339</td><td>0.0797</td><td>0.0446</td><td>0.6694</td><td>0.7971</td><td>0.8925</td><td>0.4619</td><td>0.4791</td><td>0.4860</td><td>0.4619</td><td>0.4791</td><td>0.4860</td><td>0.5136</td><td>0.5551</td><td>0.5795</td>
+      <td>0.6699</td><td>0.7950</td><td>0.8933</td><td>0.1340</td><td>0.0795</td><td>0.0447</td><td>0.6699</td><td>0.7950</td><td>0.8933</td><td>0.4646</td><td>0.4815</td><td>0.4886</td><td>0.4646</td><td>0.4815</td><td>0.4886</td><td>0.5158</td><td>0.5565</td><td>0.5816</td>
+    </tr>
+    
+    <tr class="">
+      <td>sasrec_content_minilm</td>
+      <td>0.6764</td><td>0.8029</td><td>0.9015</td><td>0.1353</td><td>0.0803</td><td>0.0451</td><td>0.6764</td><td>0.8029</td><td>0.9015</td><td>0.4644</td><td>0.4815</td><td>0.4885</td><td>0.4644</td><td>0.4815</td><td>0.4885</td><td>0.5173</td><td>0.5585</td><td>0.5835</td>
     </tr>
     
     <tr class="winner-row">
-      <td>sasrec_content (winner)</td>
-      <td>0.6742</td><td>0.8014</td><td>0.9016</td><td>0.1348</td><td>0.0801</td><td>0.0451</td><td>0.6742</td><td>0.8014</td><td>0.9016</td><td>0.4648</td><td>0.4821</td><td>0.4891</td><td>0.4648</td><td>0.4821</td><td>0.4891</td><td>0.5170</td><td>0.5584</td><td>0.5839</td>
+      <td>sasrec_content_mpnet (winner)</td>
+      <td>0.6767</td><td>0.8037</td><td>0.9003</td><td>0.1353</td><td>0.0804</td><td>0.0450</td><td>0.6767</td><td>0.8037</td><td>0.9003</td><td>0.4689</td><td>0.4861</td><td>0.4929</td><td>0.4689</td><td>0.4861</td><td>0.4929</td><td>0.5208</td><td>0.5620</td><td>0.5866</td>
+    </tr>
+    
+    <tr class="">
+      <td>sasrec_content_bge</td>
+      <td>0.6769</td><td>0.8056</td><td>0.8960</td><td>0.1354</td><td>0.0806</td><td>0.0448</td><td>0.6769</td><td>0.8056</td><td>0.8960</td><td>0.4650</td><td>0.4822</td><td>0.4886</td><td>0.4650</td><td>0.4822</td><td>0.4886</td><td>0.5178</td><td>0.5594</td><td>0.5825</td>
+    </tr>
+    
+    <tr class="">
+      <td>sasrec_content_mxbai</td>
+      <td>0.6661</td><td>0.7948</td><td>0.8962</td><td>0.1332</td><td>0.0795</td><td>0.0448</td><td>0.6661</td><td>0.7948</td><td>0.8962</td><td>0.4454</td><td>0.4628</td><td>0.4700</td><td>0.4454</td><td>0.4628</td><td>0.4700</td><td>0.5004</td><td>0.5422</td><td>0.5681</td>
     </tr>
     
     <tr class="">
       <td>sasrec_content_only</td>
-      <td>0.4818</td><td>0.6217</td><td>0.7580</td><td>0.0964</td><td>0.0622</td><td>0.0379</td><td>0.4818</td><td>0.6217</td><td>0.7580</td><td>0.2935</td><td>0.3123</td><td>0.3218</td><td>0.2935</td><td>0.3123</td><td>0.3218</td><td>0.3402</td><td>0.3855</td><td>0.4201</td>
+      <td>0.4791</td><td>0.6229</td><td>0.7574</td><td>0.0958</td><td>0.0623</td><td>0.0379</td><td>0.4791</td><td>0.6229</td><td>0.7574</td><td>0.2928</td><td>0.3122</td><td>0.3216</td><td>0.2928</td><td>0.3122</td><td>0.3216</td><td>0.3390</td><td>0.3857</td><td>0.4198</td>
     </tr>
     
   </tbody>
@@ -225,13 +254,43 @@
     </tr>
   
     <tr>
-      <td><strong>sasrec_content</strong></td>
+      <td><strong>sasrec_content_minilm</strong></td>
       <td>Content-collaborative sequential transformer (SASRec + frozen MiniLM)</td>
       <td>same time-ordered sequences as SASRec, plus a frozen sentence-transformer (all-MiniLM-L6-v2) embedding of '{title}. Genres: ... . Year: ...' for each item</td>
       <td>item representation = learned id-embedding + linear projection of frozen text embedding; transformer + BPR loss are unchanged. Only the projection head and id-embedding move during training; the 384-d text vectors are read-only</td>
       <td>score(u, i) = <h_u, id_emb[i] + content_proj(text_emb[i])>; same dot-product cost as plain SASRec after the fused item matrix is cached</td>
       <td>tests whether semantic content (title + genres) can lift cold or long-tail items where pure id-embeddings have little signal; expected to help most for items with few training interactions</td>
       <td>low — semantic neighborhoods inspectable via text-embedding cosine, but model decisions still latent</td>
+    </tr>
+  
+    <tr>
+      <td><strong>sasrec_content_mpnet</strong></td>
+      <td>Content-collaborative SASRec (id + frozen all-mpnet-base-v2, 768d)</td>
+      <td>same as sasrec_content_minilm but text encoded with sentence-transformers/all-mpnet-base-v2 (768d) — a stronger general-purpose SBERT model than MiniLM-L6</td>
+      <td>identical to sasrec_content_minilm with a wider content-projection head (768→d_model)</td>
+      <td>score(u, i) = <h_u, id_emb[i] + content_proj(text_emb[i])>; same dot-product cost</td>
+      <td>tests whether scaling the encoder (MiniLM 384d → MPNet 768d) lifts the content signal on shallow item text</td>
+      <td>low</td>
+    </tr>
+  
+    <tr>
+      <td><strong>sasrec_content_bge</strong></td>
+      <td>Content-collaborative SASRec (id + frozen BAAI/bge-large-en-v1.5, 1024d)</td>
+      <td>same as sasrec_content_minilm but text encoded with BAAI/bge-large-en-v1.5 (1024d) — a top-tier MTEB encoder in open weights</td>
+      <td>identical training loop; content-projection head is 1024→d_model</td>
+      <td>score(u, i) = <h_u, id_emb[i] + content_proj(text_emb[i])></td>
+      <td>tests whether a SOTA-class encoder (BGE) recovers more semantic structure than MiniLM/MPNet on title+genre text</td>
+      <td>low</td>
+    </tr>
+  
+    <tr>
+      <td><strong>sasrec_content_mxbai</strong></td>
+      <td>Content-collaborative SASRec (id + frozen mxbai-embed-large-v1, 1024d)</td>
+      <td>same as sasrec_content_minilm but text encoded with mixedbread-ai/mxbai-embed-large-v1 (1024d) — currently #1-2 on MTEB short-text</td>
+      <td>identical training loop; content-projection head is 1024→d_model</td>
+      <td>score(u, i) = <h_u, id_emb[i] + content_proj(text_emb[i])></td>
+      <td>head-to-head against BGE on the same data — they are both 1024d and same scale; tests encoder choice within the SOTA tier</td>
+      <td>low</td>
     </tr>
   
     <tr>
@@ -261,10 +320,10 @@
   
     <tr>
       <td><strong>random</strong></td>
-      <td>0.00</td>
       <td>0.01</td>
       <td>0.01</td>
-      <td>122790</td>
+      <td>0.01</td>
+      <td>121608</td>
       <td>0.00</td>
     </tr>
   
@@ -273,70 +332,97 @@
       <td>0.01</td>
       <td>0.00</td>
       <td>0.00</td>
-      <td>1198804</td>
+      <td>1125968</td>
       <td>0.03</td>
     </tr>
   
     <tr>
       <td><strong>itemknn</strong></td>
-      <td>0.88</td>
+      <td>0.85</td>
       <td>0.05</td>
       <td>0.10</td>
-      <td>17039</td>
+      <td>16953</td>
       <td>7.01</td>
     </tr>
   
     <tr>
       <td><strong>als</strong></td>
-      <td>9.01</td>
+      <td>9.22</td>
       <td>0.02</td>
       <td>0.02</td>
-      <td>60263</td>
+      <td>58614</td>
       <td>2.38</td>
     </tr>
   
     <tr>
       <td><strong>bpr</strong></td>
-      <td>23.07</td>
+      <td>27.67</td>
       <td>0.02</td>
       <td>0.02</td>
-      <td>56307</td>
+      <td>60178</td>
       <td>4.76</td>
     </tr>
   
     <tr>
       <td><strong>lgbm</strong></td>
-      <td>120.94</td>
-      <td>7.34</td>
-      <td>14.15</td>
-      <td>119</td>
+      <td>122.10</td>
+      <td>7.47</td>
+      <td>12.18</td>
+      <td>120</td>
       <td>3.40</td>
     </tr>
   
     <tr>
       <td><strong>sasrec</strong></td>
-      <td>586.68</td>
+      <td>605.33</td>
       <td>0.02</td>
       <td>0.02</td>
-      <td>57363</td>
+      <td>57163</td>
       <td>5.15</td>
     </tr>
   
     <tr>
-      <td><strong>sasrec_content</strong></td>
-      <td>707.94</td>
+      <td><strong>sasrec_content_minilm</strong></td>
+      <td>648.74</td>
       <td>0.02</td>
       <td>0.02</td>
-      <td>56693</td>
+      <td>58872</td>
       <td>16.11</td>
     </tr>
   
     <tr>
+      <td><strong>sasrec_content_mpnet</strong></td>
+      <td>775.42</td>
+      <td>0.02</td>
+      <td>0.02</td>
+      <td>57951</td>
+      <td>27.06</td>
+    </tr>
+  
+    <tr>
+      <td><strong>sasrec_content_bge</strong></td>
+      <td>855.23</td>
+      <td>0.02</td>
+      <td>0.02</td>
+      <td>57022</td>
+      <td>34.36</td>
+    </tr>
+  
+    <tr>
+      <td><strong>sasrec_content_mxbai</strong></td>
+      <td>797.92</td>
+      <td>0.02</td>
+      <td>0.02</td>
+      <td>57397</td>
+      <td>34.36</td>
+    </tr>
+  
+    <tr>
       <td><strong>sasrec_content_only</strong></td>
-      <td>680.85</td>
+      <td>623.60</td>
       <td>0.02</td>
       <td>0.02</td>
-      <td>54994</td>
+      <td>58115</td>
       <td>16.11</td>
     </tr>
   
@@ -419,7 +505,7 @@ models:
     epochs: 200
     batch_size: 256
     device: auto
-  sasrec_content:
+  sasrec_content_minilm:
     d_model: 64
     num_heads: 1
     num_blocks: 2
@@ -433,6 +519,48 @@ models:
     content:
       mode: fuse
       encoder: minilm
+  sasrec_content_mpnet:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-06
+    epochs: 200
+    batch_size: 256
+    device: auto
+    content:
+      mode: fuse
+      encoder: mpnet
+  sasrec_content_bge:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-06
+    epochs: 200
+    batch_size: 256
+    device: auto
+    content:
+      mode: fuse
+      encoder: bge
+  sasrec_content_mxbai:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-06
+    epochs: 200
+    batch_size: 256
+    device: auto
+    content:
+      mode: fuse
+      encoder: mxbai
   sasrec_content_only:
     d_model: 64
     num_heads: 1
@@ -492,9 +620,9 @@ report:
 </details>
 <div class="meta">
   Seed: <code>42</code><br>
-  Code commit: <code>42b90fd</code><br>
+  Code commit: <code>bceb502</code><br>
   MLflow tracking URI: <code>sqlite:///mlruns.db</code><br>
-  Registered model: <code>movielense-1m-ncf-best</code> (v3)
+  Registered model: <code>movielense-1m-ncf-best</code> (v4)
 </div>
 </div>
 
@@ -515,13 +643,13 @@ report:
   }], {title: "User interactions distribution", margin: {t: 30}});
 
   // Metric bars
-  Plotly.newPlot("metric-bars", [{"name": "hr@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.04736667770785028, 0.3388539251407751, 0.44153693275919176, 0.5329579330904273, 0.47913216296787015, 0.43954951970851275, 0.6694269625703876, 0.6742298774428619, 0.4817820470354422]}, {"name": "hr@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.0967207684663796, 0.4983438224577675, 0.6222259026167605, 0.6906260351109639, 0.6616429281218946, 0.6200728718118582, 0.7971182510765153, 0.80142431268632, 0.6217290493540908]}, {"name": "hr@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.19128850612785692, 0.676217290493541, 0.7833719774759854, 0.8246107982775753, 0.8390195428949984, 0.785028155018218, 0.8925140775091089, 0.9016230539913879, 0.7580324610798278]}, {"name": "precision@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.0094733355415701, 0.06777078502815259, 0.08830738655183575, 0.106591586618087, 0.09582643259357312, 0.08790990394169985, 0.13388539251408527, 0.13484597548858035, 0.09635640940708766]}, {"name": "precision@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.009672076846638053, 0.049834382245776736, 0.06222259026167885, 0.06906260351110075, 0.06616429281219317, 0.06200728718118858, 0.07971182510765833, 0.08014243126863888, 0.06217290493541187]}, {"name": "precision@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.009564425306392656, 0.03381086452467906, 0.03916859887380251, 0.04123053991388247, 0.041950977144753786, 0.03925140775091415, 0.044625703875459916, 0.04508115269957397, 0.03790162305399433]}, {"name": "recall@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.04736667770785028, 0.3388539251407751, 0.44153693275919176, 0.5329579330904273, 0.47913216296787015, 0.43954951970851275, 0.6694269625703876, 0.6742298774428619, 0.4817820470354422]}, {"name": "recall@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.0967207684663796, 0.4983438224577675, 0.6222259026167605, 0.6906260351109639, 0.6616429281218946, 0.6200728718118582, 0.7971182510765153, 0.80142431268632, 0.6217290493540908]}, {"name": "recall@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.19128850612785692, 0.676217290493541, 0.7833719774759854, 0.8246107982775753, 0.8390195428949984, 0.785028155018218, 0.8925140775091089, 0.9016230539913879, 0.7580324610798278]}, {"name": "map@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.021646240476979144, 0.18457822678591299, 0.2500910897648228, 0.31780942917080635, 0.27522082367229717, 0.2596168709285638, 0.461852710610578, 0.46479242574804086, 0.293549188473004]}, {"name": "map@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.028099286529230168, 0.20569455617070748, 0.2742110154208515, 0.33919528173420016, 0.2998220923568704, 0.2837363365352749, 0.47910791179671675, 0.4820519645420284, 0.31227976781968025]}, {"name": "map@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.034457584531516414, 0.21793063283397401, 0.2854882515508756, 0.34863424304254487, 0.312131062889882, 0.2953287859893904, 0.4859679782983953, 0.48909442139271003, 0.3218142679988719]}, {"name": "mrr@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.021646240476979144, 0.18457822678591299, 0.2500910897648228, 0.31780942917080635, 0.27522082367229717, 0.2596168709285638, 0.461852710610578, 0.46479242574804086, 0.293549188473004]}, {"name": "mrr@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.028099286529230168, 0.20569455617070748, 0.2742110154208515, 0.33919528173420016, 0.2998220923568704, 0.2837363365352749, 0.47910791179671675, 0.4820519645420284, 0.31227976781968025]}, {"name": "mrr@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.034457584531516414, 0.21793063283397401, 0.2854882515508756, 0.34863424304254487, 0.312131062889882, 0.2953287859893904, 0.4859679782983953, 0.48909442139271003, 0.3218142679988719]}, {"name": "ndcg@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.02796201772314851, 0.22268898822448963, 0.29735953406355453, 0.3711042411555149, 0.3256481166907168, 0.3040875840680072, 0.5135890761374506, 0.5170231728299096, 0.34020775986499435]}, {"name": "ndcg@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.04378555064469604, 0.2740910212133717, 0.35580036111994107, 0.42243426086427777, 0.3849116089281489, 0.36249318555842847, 0.555096701085114, 0.5584345683598303, 0.3855217907593888]}, {"name": "ndcg@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"], "y": [0.06743769585297393, 0.31893345983843674, 0.3966557756395391, 0.45648460145456443, 0.42976202461394775, 0.40437993570999375, 0.5795118692839933, 0.5838782157864119, 0.4200744677529062]}],
+  Plotly.newPlot("metric-bars", [{"name": "hr@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.04736667770785028, 0.3388539251407751, 0.44153693275919176, 0.5329579330904273, 0.47913216296787015, 0.43954951970851275, 0.6699238158330573, 0.6763829082477641, 0.6767141437562106, 0.6768797615104339, 0.6661146074859224, 0.47913216296787015]}, {"name": "hr@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.0967207684663796, 0.4983438224577675, 0.6222259026167605, 0.6906260351109639, 0.6616429281218946, 0.6200728718118582, 0.7949652202716131, 0.8029148724743292, 0.8037429612454455, 0.8055647565419013, 0.7947996025173899, 0.6228883736336536]}, {"name": "hr@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.19128850612785692, 0.676217290493541, 0.7833719774759854, 0.8246107982775753, 0.8390195428949984, 0.785028155018218, 0.8933421662802252, 0.9014574362371647, 0.9002981119576019, 0.8959920503477973, 0.8961576681020206, 0.7573699900629347]}, {"name": "precision@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.0094733355415701, 0.06777078502815259, 0.08830738655183575, 0.106591586618087, 0.09582643259357312, 0.08790990394169985, 0.13398476316661923, 0.1352765816495609, 0.13534282875125023, 0.13537595230209487, 0.13322292149719211, 0.09582643259357312]}, {"name": "precision@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.009672076846638053, 0.049834382245776736, 0.06222259026167885, 0.06906260351110075, 0.06616429281219317, 0.06200728718118858, 0.07949652202716805, 0.08029148724743984, 0.08037429612455148, 0.0805564756541971, 0.07947996025174571, 0.06228883736336817]}, {"name": "precision@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.009564425306392656, 0.03381086452467906, 0.03916859887380251, 0.04123053991388247, 0.041950977144753786, 0.03925140775091415, 0.04466710831401574, 0.0450728718118628, 0.04501490559788465, 0.04479960251739437, 0.04480788340510554, 0.037868499503149675]}, {"name": "recall@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.04736667770785028, 0.3388539251407751, 0.44153693275919176, 0.5329579330904273, 0.47913216296787015, 0.43954951970851275, 0.6699238158330573, 0.6763829082477641, 0.6767141437562106, 0.6768797615104339, 0.6661146074859224, 0.47913216296787015]}, {"name": "recall@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.0967207684663796, 0.4983438224577675, 0.6222259026167605, 0.6906260351109639, 0.6616429281218946, 0.6200728718118582, 0.7949652202716131, 0.8029148724743292, 0.8037429612454455, 0.8055647565419013, 0.7947996025173899, 0.6228883736336536]}, {"name": "recall@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.19128850612785692, 0.676217290493541, 0.7833719774759854, 0.8246107982775753, 0.8390195428949984, 0.785028155018218, 0.8933421662802252, 0.9014574362371647, 0.9002981119576019, 0.8959920503477973, 0.8961576681020206, 0.7573699900629347]}, {"name": "map@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.021646240476979144, 0.18457822678591299, 0.2500910897648228, 0.31780942917080635, 0.27522082367229717, 0.2596168709285638, 0.4646102462183948, 0.46441702550513486, 0.468913547532296, 0.46496632438997526, 0.4454068676162086, 0.2927707850281548]}, {"name": "map@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.028099286529230168, 0.20569455617070748, 0.2742110154208515, 0.33919528173420016, 0.2998220923568704, 0.2837363365352749, 0.48153381756810043, 0.4815484734249236, 0.4860535392251206, 0.4822038465380644, 0.46282998680315707, 0.3121874293495678]}, {"name": "map@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.034457584531516414, 0.21793063283397401, 0.2854882515508756, 0.34863424304254487, 0.312131062889882, 0.2953287859893904, 0.4885986611667391, 0.4884621442171623, 0.4928541191480276, 0.488613468243523, 0.47000750908103767, 0.3215621143701733]}, {"name": "mrr@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.021646240476979144, 0.18457822678591299, 0.2500910897648228, 0.31780942917080635, 0.27522082367229717, 0.2596168709285638, 0.4646102462183948, 0.46441702550513486, 0.468913547532296, 0.46496632438997526, 0.4454068676162086, 0.2927707850281548]}, {"name": "mrr@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.028099286529230168, 0.20569455617070748, 0.2742110154208515, 0.33919528173420016, 0.2998220923568704, 0.2837363365352749, 0.48153381756810043, 0.4815484734249236, 0.4860535392251206, 0.4822038465380644, 0.46282998680315707, 0.3121874293495678]}, {"name": "mrr@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.034457584531516414, 0.21793063283397401, 0.2854882515508756, 0.34863424304254487, 0.312131062889882, 0.2953287859893904, 0.4885986611667391, 0.4884621442171623, 0.4928541191480276, 0.488613468243523, 0.47000750908103767, 0.3215621143701733]}, {"name": "ndcg@5", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.02796201772314851, 0.22268898822448963, 0.29735953406355453, 0.3711042411555149, 0.3256481166907168, 0.3040875840680072, 0.5158008516093154, 0.5172895132872966, 0.520759993832438, 0.5177520078795654, 0.500385833188276, 0.3390088799674304]}, {"name": "ndcg@10", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.04378555064469604, 0.2740910212133717, 0.35580036111994107, 0.42243426086427777, 0.3849116089281489, 0.36249318555842847, 0.5564747273293222, 0.5584529128575723, 0.5620272520860539, 0.559427859385171, 0.5422464328900882, 0.3857286871055285]}, {"name": "ndcg@20", "type": "bar", "x": ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"], "y": [0.06743769585297393, 0.31893345983843674, 0.3966557756395391, 0.45648460145456443, 0.42976202461394775, 0.40437993570999375, 0.5816444605741607, 0.5834599354993465, 0.5865641838596882, 0.5824559738593097, 0.5680546347743046, 0.41977760046943097]}],
     {title: "Test metrics by model", barmode: "group", margin: {t: 30}});
 
   
   Plotly.newPlot("bench-throughput", [
-    {x: ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content", "sasrec_content_only"],
-     y: [122790.5, 1198803.6, 17039.0, 60262.9, 56307.0, 118.6, 57363.4, 56693.4, 54993.5],
+    {x: ["random", "popularity", "itemknn", "als", "bpr", "lgbm", "sasrec", "sasrec_content_minilm", "sasrec_content_mpnet", "sasrec_content_bge", "sasrec_content_mxbai", "sasrec_content_only"],
+     y: [121608.3, 1125967.6, 16953.1, 58614.5, 60178.3, 120.5, 57162.6, 58871.9, 57951.4, 57022.0, 57397.0, 58114.9],
      type: "bar", name: "users/sec", marker: {color: "#5c940d"}},
   ], {title: "Scoring throughput (users/sec, batch)", margin: {t: 30}});
   

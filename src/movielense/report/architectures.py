@@ -92,7 +92,7 @@ ARCHITECTURE: dict[str, dict[str, str]] = {
         ),
         "interpretability": "low — attention weights can be probed but require additional tooling",
     },
-    "sasrec_content": {
+    "sasrec_content_minilm": {
         "type": "Content-collaborative sequential transformer (SASRec + frozen MiniLM)",
         "input": (
             "same time-ordered sequences as SASRec, plus a frozen sentence-transformer "
@@ -113,6 +113,30 @@ ARCHITECTURE: dict[str, dict[str, str]] = {
             "few training interactions"
         ),
         "interpretability": "low — semantic neighborhoods inspectable via text-embedding cosine, but model decisions still latent",
+    },
+    "sasrec_content_mpnet": {
+        "type": "Content-collaborative SASRec (id + frozen all-mpnet-base-v2, 768d)",
+        "input": "same as sasrec_content_minilm but text encoded with sentence-transformers/all-mpnet-base-v2 (768d) — a stronger general-purpose SBERT model than MiniLM-L6",
+        "training": "identical to sasrec_content_minilm with a wider content-projection head (768→d_model)",
+        "inference": "score(u, i) = <h_u, id_emb[i] + content_proj(text_emb[i])>; same dot-product cost",
+        "use_case": "tests whether scaling the encoder (MiniLM 384d → MPNet 768d) lifts the content signal on shallow item text",
+        "interpretability": "low",
+    },
+    "sasrec_content_bge": {
+        "type": "Content-collaborative SASRec (id + frozen BAAI/bge-large-en-v1.5, 1024d)",
+        "input": "same as sasrec_content_minilm but text encoded with BAAI/bge-large-en-v1.5 (1024d) — a top-tier MTEB encoder in open weights",
+        "training": "identical training loop; content-projection head is 1024→d_model",
+        "inference": "score(u, i) = <h_u, id_emb[i] + content_proj(text_emb[i])>",
+        "use_case": "tests whether a SOTA-class encoder (BGE) recovers more semantic structure than MiniLM/MPNet on title+genre text",
+        "interpretability": "low",
+    },
+    "sasrec_content_mxbai": {
+        "type": "Content-collaborative SASRec (id + frozen mxbai-embed-large-v1, 1024d)",
+        "input": "same as sasrec_content_minilm but text encoded with mixedbread-ai/mxbai-embed-large-v1 (1024d) — currently #1-2 on MTEB short-text",
+        "training": "identical training loop; content-projection head is 1024→d_model",
+        "inference": "score(u, i) = <h_u, id_emb[i] + content_proj(text_emb[i])>",
+        "use_case": "head-to-head against BGE on the same data — they are both 1024d and same scale; tests encoder choice within the SOTA tier",
+        "interpretability": "low",
     },
     "sasrec_content_only": {
         "type": "Content-only sequential transformer (SASRec without id-embeddings)",

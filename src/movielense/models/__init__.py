@@ -38,17 +38,30 @@ def build(
             seed=seed,
             **params,
         )
-    if name in ("sasrec", "sasrec_content", "sasrec_content_only"):
+    if name == "sasrec" or name.startswith("sasrec_content"):
         ce_cfg = dict(params.pop("content", {}) or {})
         mode = ce_cfg.get("mode", "off")
         encoder = ce_cfg.get("encoder")
-        if mode != "off" and content_embeddings is None:
-            raise ValueError(f"{name} requires content_embeddings (mode={mode})")
+        # content_embeddings here is either an ndarray (single-encoder back-compat)
+        # or a dict {encoder_name: ndarray} when multiple encoders are in play.
+        emb_for_model = None
+        if mode != "off":
+            if content_embeddings is None:
+                raise ValueError(f"{name} requires content_embeddings (mode={mode})")
+            if isinstance(content_embeddings, dict):
+                if encoder not in content_embeddings:
+                    raise ValueError(
+                        f"{name} needs encoder='{encoder}' but only "
+                        f"{list(content_embeddings.keys())} were precomputed"
+                    )
+                emb_for_model = content_embeddings[encoder]
+            else:
+                emb_for_model = content_embeddings
         return SASRecRecommender(
             num_users=num_users,
             num_items=num_items,
             seed=seed,
-            content_embeddings=content_embeddings if mode != "off" else None,
+            content_embeddings=emb_for_model,
             content_mode=mode,
             content_encoder=encoder,
             **params,

@@ -70,7 +70,7 @@ models:
     epochs: 200
     batch_size: 256
     device: auto
-  sasrec_content:
+  sasrec_content_minilm:
     d_model: 64
     num_heads: 1
     num_blocks: 2
@@ -84,6 +84,48 @@ models:
     content:
       mode: fuse
       encoder: minilm
+  sasrec_content_mpnet:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-6
+    epochs: 200
+    batch_size: 256
+    device: auto
+    content:
+      mode: fuse
+      encoder: mpnet
+  sasrec_content_bge:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-6
+    epochs: 200
+    batch_size: 256
+    device: auto
+    content:
+      mode: fuse
+      encoder: bge
+  sasrec_content_mxbai:
+    d_model: 64
+    num_heads: 1
+    num_blocks: 2
+    max_len: 200
+    dropout: 0.2
+    lr: 0.001
+    weight_decay: 1.0e-6
+    epochs: 200
+    batch_size: 256
+    device: auto
+    content:
+      mode: fuse
+      encoder: mxbai
   sasrec_content_only:
     d_model: 64
     num_heads: 1

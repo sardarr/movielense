@@ -17,9 +17,14 @@ from .load import GENRE_COLS, GENRE_NAMES
 
 log = logging.getLogger(__name__)
 
-ENCODER_MODELS = {
+# Local sentence-transformer models (HuggingFace IDs).
+LOCAL_ENCODERS = {
     "minilm": "sentence-transformers/all-MiniLM-L6-v2",
+    "mpnet":  "sentence-transformers/all-mpnet-base-v2",
+    "bge":    "BAAI/bge-large-en-v1.5",
+    "mxbai":  "mixedbread-ai/mxbai-embed-large-v1",
 }
+ENCODER_MODELS = LOCAL_ENCODERS
 
 
 def _item_text(row: pd.Series) -> str:
@@ -45,12 +50,10 @@ def _cache_key(texts: list[str], encoder: str) -> str:
     return h.hexdigest()[:16]
 
 
-def _encode(texts: list[str], encoder: str) -> np.ndarray:
-    if encoder not in ENCODER_MODELS:
-        raise ValueError(f"unknown content encoder: {encoder}")
+def _encode_local(texts: list[str], hf_id: str) -> np.ndarray:
     from sentence_transformers import SentenceTransformer
 
-    model = SentenceTransformer(ENCODER_MODELS[encoder])
+    model = SentenceTransformer(hf_id)
     embs = model.encode(
         texts,
         show_progress_bar=False,
@@ -59,6 +62,12 @@ def _encode(texts: list[str], encoder: str) -> np.ndarray:
         normalize_embeddings=False,
     )
     return embs.astype(np.float32)
+
+
+def _encode(texts: list[str], encoder: str) -> np.ndarray:
+    if encoder in LOCAL_ENCODERS:
+        return _encode_local(texts, LOCAL_ENCODERS[encoder])
+    raise ValueError(f"unknown content encoder: {encoder}")
 
 
 def build_content_embeddings(
